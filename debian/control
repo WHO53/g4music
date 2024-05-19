@@ -20,10 +20,6 @@ Package: g4music
 Architecture: any
 Depends: ${shlibs:Depends}, 
          ${misc:Depends}, 
-         libgstreamer1.0-0,
-         libgtk-4-1,
-         libadwaita-1-0,
-         libglib2.0-0,
          dbus
 Description: A fast, fluent, light weight music player written in GTK4,
  with a beautiful, adaptive user interface, focuses on high performance.
