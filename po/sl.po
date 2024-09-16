@@ -1,436 +1,459 @@
-# SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# Slovenian translation for g4music.
+# Copyright (C) 2024 g4music's COPYRIGHT HOLDER
 # This file is distributed under the same license as the g4music package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# Martin Srebotnjak <miles@filmsi.net>, 2024.
 #
-#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: g4music\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-28 07:20+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: \n"
+"Project-Id-Version: g4music master\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/neithern/g4music/issues\n"
+"POT-Creation-Date: 2024-08-27 15:12+0000\n"
+"PO-Revision-Date: 2024-08-27 22:02+0200\n"
+"Last-Translator: Martin Srebotnjak <miles@filmsi.net>\n"
+"Language-Team: Slovenian <gnome-si@googlegroups.com>\n"
+"Language: sl\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=4; plural=(n%100==1 ? 1 : n%100==2 ? 2 : n%100==3 || "
+"n%100==4 ? 3 : 0);\n"
+"X-Generator: Poedit 2.2.1\n"
+"X-Poedit-SourceCharset: ISO-8859-1\n"
 
 #: data/app.appdata.xml.in:4 data/app.desktop.in:3 src/application.vala:236
 #: src/main.vala:24
 msgid "Gapless"
-msgstr ""
+msgstr "Brez vrzeli"
 
 #: data/app.appdata.xml.in:7
 msgid "Play your music elegantly"
-msgstr ""
+msgstr "Elegantno predvajajte glasbo"
+
+#: data/app.appdata.xml.in:9
+msgid "Nanling"
+msgstr "Nanling"
 
 #: data/app.appdata.xml.in:22
 msgid ""
 "Gapless (AKA: G4Music) is a light weight music player written in GTK4, "
 "focuses on large music collection."
 msgstr ""
+"Brez vrzeli (AKA: G4Music) je lahek glasbeni predvajalnik, napisan v GTK4, "
+"ki se osredotoča na veliko glasbeno zbirko."
 
 #: data/app.appdata.xml.in:23
 msgid "Features"
-msgstr ""
+msgstr "Zmožnosti"
 
 #: data/app.appdata.xml.in:25
 msgid ""
 "Supports most music file types, Samba and any other remote protocols "
 "(depends on GIO and GStreamer)."
 msgstr ""
+"Podpira večino vrst glasbenih datotek, Sambo in vse druge oddaljene "
+"protokole (odvisno od GIO in GStreamer)."
 
 #: data/app.appdata.xml.in:26
 msgid ""
 "Fast loading and parsing thousands of music files in very few seconds, "
 "monitor local changes."
 msgstr ""
+"Hitro nalaganje in razčlenjevanje na tisoče glasbenih datotek v zelo nekaj "
+"sekundah, spremljajte krajevne spremembe."
 
 #: data/app.appdata.xml.in:27
 msgid ""
 "Low memory usage for large music collection with album covers (embedded and "
 "external), no thumbnail caches to store."
 msgstr ""
+"Nizka poraba pomnilnika za veliko glasbeno zbirko z naslovnicami albumov "
+"(vdelanimi in zunanjimi), brez predpomnilnikov sličic za shranjevanje."
 
 #: data/app.appdata.xml.in:28
 msgid ""
 "Group and sorts by album/artist/title, shuffle list, full-text searching."
 msgstr ""
+"Združevanje in razvrščanje po albumu/izvajalcu/naslovu, naključni seznami, "
+"iskanju po celotnem besedilu."
 
 #: data/app.appdata.xml.in:29
 msgid ""
 "Fluent adaptive user interface for different screen (Desktop, Tablet, "
 "Mobile)."
 msgstr ""
+"Tekoč prilagodljiv uporabniški vmesnik za različne zaslone (namizje, "
+"tablični računalnik, mobilnik)."
 
 #: data/app.appdata.xml.in:30
 msgid "Gaussian blurred cover as background, follows GNOME light/dark mode."
 msgstr ""
+"Gaussova zabrisana naslovnica kot ozadje, sledi svetlemu/temnemu načinu "
+"GNOME."
 
 #: data/app.appdata.xml.in:31
 msgid "Drag-drop from GNOME Files, showing music in Files."
-msgstr ""
+msgstr "Povlecite in spustite iz Datotek GNOME, ki prikazuje glasbo v mapah."
 
 #: data/app.appdata.xml.in:32
 msgid "Supports audio peaks visualizer."
-msgstr ""
+msgstr "Podpira vizualizacijo najvišjih ravni zvoka."
 
 #: data/app.appdata.xml.in:33
 msgid "Supports gapless playback."
-msgstr ""
+msgstr "Podpira predvajanje brez premorov."
 
 #: data/app.appdata.xml.in:34
 msgid "Supports normalizing volume with ReplayGain."
-msgstr ""
+msgstr "Podpira normaliziranje glasnosti s funkcijo ReplayGain."
 
 #: data/app.appdata.xml.in:35
 msgid "Supports PipeWire and other audio sink."
-msgstr ""
+msgstr "Podpira PipeWire in druge zvokovne ponore."
 
 #: data/app.appdata.xml.in:36
 msgid "Supports MPRIS control."
-msgstr ""
+msgstr "Podpira nadzor MPRIS."
 
 #: data/app.appdata.xml.in:47
 msgid "Main window"
-msgstr ""
+msgstr "Glavno okno"
 
 #: data/app.appdata.xml.in:51
 msgid "Albums view"
-msgstr ""
+msgstr "Pogled albumov"
 
 #: data/app.appdata.xml.in:55
 msgid "Playing view"
-msgstr ""
+msgstr "Predvajalni pogled"
 
 #: data/app.appdata.xml.in:59
 msgid "Playlist view"
-msgstr ""
+msgstr "Pogled seznama predvajanja"
 
 #: data/app.desktop.in:4
 msgid "Music Player"
-msgstr ""
+msgstr "Predvajalnik glasbe"
 
 #: data/app.desktop.in:5
 msgid "Play music"
-msgstr ""
+msgstr "Predvajajte glasbo"
 
 #: data/app.desktop.in:12
 msgid "music;sound;player;media;audio;playlist;"
-msgstr ""
+msgstr "glasba;zvok;predvajalnik;medij;avdio;seznam predvajanja;"
 
 #: src/gtk/help-overlay.ui:11
 msgctxt "shortcut window"
 msgid "General"
-msgstr ""
+msgstr "Splošno"
 
 #: src/gtk/help-overlay.ui:14
 msgctxt "shortcut window"
 msgid "Show Shortcuts"
-msgstr ""
+msgstr "Pokaže tipkovne bližnjice‫"
 
 #: src/gtk/help-overlay.ui:20
 msgctxt "shortcut window"
 msgid "Preferences"
-msgstr ""
+msgstr "Nastavitve"
 
 #: src/gtk/help-overlay.ui:26
 msgctxt "shortcut window"
 msgid "Quit"
-msgstr ""
+msgstr "Izhod"
 
 #: src/gtk/help-overlay.ui:34
 msgctxt "shortcut window"
 msgid "Playback"
-msgstr ""
+msgstr "Predvajanje"
 
 #: src/gtk/help-overlay.ui:37
 msgctxt "shortcut window"
 msgid "Play/Pause"
-msgstr ""
+msgstr "Predvajaj / premor"
 
 #: src/gtk/help-overlay.ui:43
 msgctxt "shortcut window"
 msgid "Play Next"
-msgstr ""
+msgstr "Predvajaj naslednje"
 
 #: src/gtk/help-overlay.ui:49
 msgctxt "shortcut window"
 msgid "Play Previous"
-msgstr ""
+msgstr "Predvajaj prejšnje"
 
 #: src/gtk/help-overlay.ui:57
 msgctxt "shortcut window"
 msgid "Playlist"
-msgstr ""
+msgstr "Seznam predvajanja"
 
 #: src/gtk/help-overlay.ui:60
 msgctxt "shortcut window"
 msgid "Search"
-msgstr ""
+msgstr "Iskanje"
 
 #: src/gtk/help-overlay.ui:66
 msgctxt "shortcut window"
 msgid "Toggle Sort"
-msgstr ""
+msgstr "Preklopi razvrščanje"
 
 #: src/gtk/help-overlay.ui:72
 msgctxt "shortcut window"
 msgid "Reload Library"
-msgstr ""
+msgstr "Znova naloži knjižnico"
 
 #: src/gtk/play-panel.ui:16 src/ui/store-panel.vala:368
 msgid "Back"
-msgstr ""
+msgstr "Nazaj"
 
 #: src/gtk/preferences.ui:10
 msgid "General"
-msgstr ""
+msgstr "Splošno"
 
 #: src/gtk/preferences.ui:14
 msgid "Prefer dark theme"
-msgstr ""
+msgstr "Prednost ima temna tema"
 
 #: src/gtk/preferences.ui:26
 msgid "Background blur mode"
-msgstr ""
+msgstr "Način zabrisanosti ozadja"
 
 #: src/gtk/preferences.ui:32
 msgid "Compact playlist view"
-msgstr ""
+msgstr "Strnjen pogled seznama predvajanja"
 
 #: src/gtk/preferences.ui:44
 msgid "Grid view for artists/albums"
-msgstr ""
+msgstr "Mrežni pogled za izvajalce/albume"
 
 #: src/gtk/preferences.ui:56 src/application.vala:400
 msgid "Keep playing after window closed"
-msgstr ""
+msgstr "Nadaljuj s predvajanjem po zaprtju okna"
 
 #: src/gtk/preferences.ui:69
 msgid "Library"
-msgstr ""
+msgstr "Knjižnica"
 
 #: src/gtk/preferences.ui:73
 msgid "Load music from folder"
-msgstr ""
+msgstr "Naloži glasbo iz mape"
 
 #: src/gtk/preferences.ui:85
 msgid "Monitor local file changes"
-msgstr ""
+msgstr "Spremljaj krajevne spremembe datotek"
 
 #: src/gtk/preferences.ui:97
 msgid "Load thumbnails for non-local files"
-msgstr ""
+msgstr "Naloži sličice za datoteke, ki niso krajevne"
 
 #: src/gtk/preferences.ui:98
 msgid "May cause slowdowns and excess network usage"
-msgstr ""
+msgstr "Lahko povzroči upočasnitve in prekomerno porabo omrežja"
 
 #: src/gtk/preferences.ui:111
 msgid "Playback"
-msgstr ""
+msgstr "Predvajanje"
 
 #: src/gtk/preferences.ui:115
 msgid "Show audio peak level"
-msgstr ""
+msgstr "Pokaži najvišjo raven zvoka"
 
 #: src/gtk/preferences.ui:119
 msgid "Display characters"
-msgstr ""
+msgstr "Prikaz znakov"
 
 #: src/gtk/preferences.ui:134
 msgid "Rotate album cover"
-msgstr ""
+msgstr "Zasukaj naslovnico albuma"
 
 #: src/gtk/preferences.ui:146
 msgid "Enable gapless playback"
-msgstr ""
+msgstr "Omogoči predvajanje brez premorov"
 
 #: src/gtk/preferences.ui:158
 msgid "Normalize volume with ReplayGain"
-msgstr ""
+msgstr "Normaliziraj glasnost s funkcijo ReplayGain"
 
 #: src/gtk/preferences.ui:164
 msgid "Prefer audio sink of GStreamer"
-msgstr ""
+msgstr "Prednost naj ima zvočni odtok GStreamer"
 
 #: src/gtk/store-panel.ui:22
 msgid "Main Menu"
-msgstr ""
+msgstr "Glavni meni"
 
 #: src/gtk/store-panel.ui:29
 msgid "Search"
-msgstr ""
+msgstr "Iskanje"
 
 #: src/gtk/store-panel.ui:35
 msgid "Sort By"
-msgstr ""
+msgstr "Razvrsti po"
 
 #: src/gtk/store-panel.ui:59
 msgid "_Reload Library"
-msgstr ""
+msgstr "Znova naloži _knjižnico"
 
 #: src/gtk/store-panel.ui:65
 msgid "_Preferences"
-msgstr ""
+msgstr "_Možnosti"
 
 #: src/gtk/store-panel.ui:69
 msgid "_Keyboard Shortcuts"
-msgstr ""
+msgstr "_Tipkovne bližnjice"
 
 #: src/gtk/store-panel.ui:73
 msgid "_About"
-msgstr ""
+msgstr "_O programu"
 
 #: src/gtk/store-panel.ui:82 src/ui/preferences.vala:67
 msgid "Album"
-msgstr ""
+msgstr "Album"
 
 #: src/gtk/store-panel.ui:87
 msgid "Artist"
-msgstr ""
+msgstr "Izvajalec"
 
 #: src/gtk/store-panel.ui:92
 msgid "Artist/Album"
-msgstr ""
+msgstr "Izvajalec/album"
 
 #: src/gtk/store-panel.ui:97
 msgid "Title"
-msgstr ""
+msgstr "Naslov"
 
 #: src/gtk/store-panel.ui:102
 msgid "Recent"
-msgstr ""
+msgstr "Nedavno"
 
 #: src/gtk/store-panel.ui:107
 msgid "Shuffle"
-msgstr ""
+msgstr "Premešaj"
 
 #: src/action-handles.vala:184
 msgid "A fast, fluent, light weight music player written in GTK4."
-msgstr ""
+msgstr "Hiter, tekoč, lahek predvajalnik glasbe, napisan v GTK4."
 
 #. Translators: Replace "translator-credits" with your names, one name per line
 #: src/action-handles.vala:186
 msgid "translator-credits"
-msgstr ""
+msgstr "Martin Srebotnjak <miles@filmsi.net>"
 
 #: src/application.vala:602
 msgid "Keep playing"
-msgstr ""
+msgstr "Nadaljuj s predvajanjem"
 
 #. Translators: Play this music at next position of current playing music
 #: src/ui/music-widgets.vala:211 src/ui/music-widgets.vala:252
 #: src/ui/music-widgets.vala:262
 msgid "Play at Next"
-msgstr ""
+msgstr "Predvajaj kot naslednje"
 
 #: src/ui/music-widgets.vala:212 src/ui/music-widgets.vala:251
 #: src/ui/music-widgets.vala:261 src/ui/store-panel.vala:373
 msgid "Play"
-msgstr ""
+msgstr "Predvajaj"
 
 #: src/ui/music-widgets.vala:215 src/ui/play-panel.vala:125
 msgid "Show _Cover File"
-msgstr ""
+msgstr "Pokaži datoteko _ovitka"
 
 #: src/ui/music-widgets.vala:217 src/ui/play-panel.vala:127
 msgid "_Export Cover"
-msgstr ""
+msgstr "_Izvozi ovitek"
 
 #: src/ui/music-widgets.vala:254
 msgid "Show List File"
-msgstr ""
+msgstr "Pokaži datoteko seznama"
 
 #: src/ui/music-widgets.vala:268 src/ui/play-panel.vala:59
 msgid "Search Title"
-msgstr ""
+msgstr "Iskanje po naslovu"
 
 #: src/ui/music-widgets.vala:269 src/ui/play-panel.vala:57
 msgid "Search Album"
-msgstr ""
+msgstr "Iskanje po albumu"
 
 #: src/ui/music-widgets.vala:270 src/ui/play-panel.vala:58
 msgid "Search Artist"
-msgstr ""
+msgstr "Iskanje po izvajalcu"
 
 #: src/ui/music-widgets.vala:271
 msgid "_Show Music File"
-msgstr ""
+msgstr "_Pokaži glasbeno datoteko"
 
 #. Translators: single loop the current music
 #: src/ui/play-bar.vala:74
 msgid "Single Loop"
-msgstr ""
+msgstr "Enojna zanka"
 
 #: src/ui/play-bar.vala:84
 msgid "Play Previous"
-msgstr ""
+msgstr "Predvajaj prejšnje"
 
 #. media-playback-pause-symbolic
 #: src/ui/play-bar.vala:90
 msgid "Play/Pause"
-msgstr ""
+msgstr "Predvajaj / premor"
 
 #: src/ui/play-bar.vala:97
 msgid "Play Next"
-msgstr ""
+msgstr "Predvajaj naslednje"
 
 #: src/ui/play-panel.vala:246
 msgid ""
 "Drag and drop music files here,\n"
 "or change music location: "
 msgstr ""
+"Povlecite in spustite glasbene datoteke semkaj\n"
+"ali spremenite mesto glasbe: "
 
 #: src/ui/preferences.vala:46 src/ui/preferences.vala:67
 msgid "Never"
-msgstr ""
+msgstr "Nikoli"
 
 #: src/ui/preferences.vala:46
 msgid "Always"
-msgstr ""
+msgstr "Vedno"
 
 #: src/ui/preferences.vala:46
 msgid "Art Only"
-msgstr ""
+msgstr "Samo grafika"
 
 #: src/ui/preferences.vala:67
 msgid "Track"
-msgstr ""
+msgstr "Skladba/posnetek"
 
 #: src/ui/store-panel.vala:72
 msgid "Playing"
-msgstr ""
+msgstr "Trenutno se predvaja"
 
 #: src/ui/store-panel.vala:77
 msgid "Artists"
-msgstr ""
+msgstr "Izvajalci"
 
 #: src/ui/store-panel.vala:82
 msgid "Albums"
-msgstr ""
+msgstr "Albumi"
 
 #: src/ui/store-panel.vala:87
 msgid "Playlists"
-msgstr ""
+msgstr "Seznami predvajanja"
 
 #: src/ui/store-panel.vala:570
 msgid "No playlist found"
-msgstr ""
+msgstr "Seznam predvajanja ni bil najden"
 
 #. Translators: Current volume percent: 0~100%
 #: src/ui/volume-button.vala:33
 #, c-format
 msgid "Volume %d%%"
-msgstr ""
+msgstr "Glasnost %d %%"
 
 #: src/utils/music.vala:2
 msgid "Unknown Album"
-msgstr ""
+msgstr "Neznani album"
 
 #: src/utils/music.vala:3
 msgid "Unknown Artist"
-msgstr ""
+msgstr "Neznani izvajalec"

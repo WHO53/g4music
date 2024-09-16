@@ -10,6 +10,7 @@ namespace G4 {
         public uint32 date = 0;
         public string genre = "";
         public int track = 0;
+        public int disc = 0;
         public bool has_cover = false;
         public int64 modified_time = 0;
         public string uri = "";
@@ -115,6 +116,12 @@ namespace G4 {
                 track = (int) tr;
                 changed = true;
             }
+            uint album_disc = 0;
+            if (tags.get_uint (Gst.Tags.ALBUM_VOLUME_NUMBER, out album_disc)
+                && (int) album_disc > 0 && disc != album_disc) { 
+                disc = (int) album_disc;
+                changed = true;
+            }
             Gst.Sample? sample = null;
             if (tags.get_sample (Gst.Tags.IMAGE, out sample)
                     && has_cover != (sample != null)) {
@@ -139,6 +146,7 @@ namespace G4 {
             date = dis.read_uint32 ();
             genre = dis.read_string ();
             track = (int) dis.read_size ();
+            disc = (int) dis.read_size ();
 
             update_album_key ();
             _artist_key = artist.collate_key_for_filename ();
@@ -157,6 +165,7 @@ namespace G4 {
             dos.write_uint32 (date);
             dos.write_string (genre);
             dos.write_size (track);
+            dos.write_size (disc);
         }
 
         public void parse_tags () {
@@ -216,6 +225,8 @@ namespace G4 {
 
         public static int compare_by_album (Music s1, Music s2) {
             int ret = strcmp (s1._album_key, s2._album_key);
+            if (ret != 0) return ret;
+            ret = s1.disc - s2.disc;
             if (ret != 0) return ret;
             ret = s1.track - s2.track;
             if (ret != 0) return ret;

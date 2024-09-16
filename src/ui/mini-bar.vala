@@ -2,7 +2,7 @@ namespace G4 {
 
     public class MiniBar : Adw.ActionRow {
         private Gtk.Image _cover = new Gtk.Image ();
-        private Gtk.Label _title = new Gtk.Label (null);
+        private StableLabel _title = new StableLabel ();
         private Gtk.Label _time = new Gtk.Label ("0:00");
         private Gtk.Button _prev = new Gtk.Button ();
         private Gtk.Button _play = new Gtk.Button ();
@@ -10,8 +10,8 @@ namespace G4 {
         private int _duration = 0;
         private int _position = 0;
 
-        private CrossFadePaintable _paintable = new CrossFadePaintable ();
         private Adw.Animation? _fade_animation = null;
+        private CrossFadePaintable _paintable = new CrossFadePaintable ();
 
         construct {
             halign = Gtk.Align.FILL;
@@ -23,7 +23,7 @@ namespace G4 {
             add_controller (controller);
             activatable_widget = this;
 
-            var vbox = new Gtk.Box (Gtk.Orientation.VERTICAL, 6);
+            var vbox = new Gtk.Box (Gtk.Orientation.VERTICAL, 2);
             vbox.halign = Gtk.Align.START;
             vbox.hexpand = true;
             vbox.valign = Gtk.Align.CENTER;
@@ -40,12 +40,15 @@ namespace G4 {
             _paintable.queue_draw.connect (_cover.queue_draw);
 
             _title.halign = Gtk.Align.START;
-            _title.ellipsize = Pango.EllipsizeMode.END;
+            _title.marquee = true;
             _title.add_css_class ("title-leading");
 
             _time.halign = Gtk.Align.START;
             _time.add_css_class ("dim-label");
             _time.add_css_class ("numeric");
+            var font_size = _time.get_pango_context ().get_font_description ().get_size () / Pango.SCALE;
+            if (font_size >= 13)
+                _time.add_css_class ("title-secondly");
 
             var hbox = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 4);
             hbox.valign = Gtk.Align.CENTER;
@@ -111,16 +114,16 @@ namespace G4 {
 
         public override void snapshot (Gtk.Snapshot snapshot) {
             base.snapshot (snapshot);
-#if GTK_4_10
-            var color = get_color ();
-#else
-            var color = get_style_context ().get_color ();
-#endif
-            color.alpha = 0.25f;
-            var line_width = scale_factor >= 2 ? 0.5f : 1;
+
+            var color = Gdk.RGBA ();
+            color.alpha = 0.2f;
+            color.red = color.green = color.blue = 0;
             var rect = Graphene.Rect ();
-            rect.init (0, 0, get_width (), line_width);
-            snapshot.append_color (color, rect);
+            rect.init (0, 0, get_width (), get_height ());
+            rect.inset (6, 6);
+            var outline = Gsk.RoundedRect ();
+            outline.init_from_rect (rect, 6);
+            snapshot.append_outset_shadow (outline, color, 1, 1, 1, 5);
         }
 
         private void on_duration_changed (Gst.ClockTime duration) {

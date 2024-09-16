@@ -57,6 +57,12 @@ namespace G4 {
             }
         }
 
+        public int64 position {
+            get {
+                return (int64) _app.player.position / Gst.USECOND;
+            }
+        }
+
         public string playback_status {
             owned get {
                 return get_mpris_status(_app.player.state);
@@ -97,10 +103,13 @@ namespace G4 {
         }
 
         private void on_duration_changed (Gst.ClockTime duration) {
-            _current_duration = (int64) duration / Gst.USECOND;
-            _metadata.insert ("mpris:length", new Variant.int64 (_current_duration));
-            if (_cover_parsed)
-                send_property ("Metadata", _metadata);
+            var ms = (int64) duration / Gst.USECOND;
+            if (_current_duration != ms) {
+                _metadata.insert ("mpris:length", new Variant.int64 (ms));
+                if (_cover_parsed)
+                    send_property ("Metadata", _metadata);
+                _current_duration = ms;
+            }
         }
 
         private void on_index_changed (int index, uint size) {
@@ -113,9 +122,10 @@ namespace G4 {
         }
 
         private void on_music_changed (Music? music) {
-            _current_music = music;
-            _metadata.remove_all ();
             _cover_parsed = false;
+            _current_music = music;
+            _current_duration = 0;
+            _metadata.remove_all ();
             if (music != null) {
                 var artists = new VariantBuilder (new VariantType ("as"));
                 artists.add ("s", music?.artist ?? "");
@@ -126,7 +136,7 @@ namespace G4 {
             }
         }
 
-        private void on_music_cover_parsed (Music music, string? uri) {
+        private void on_music_cover_parsed (Music music, Gdk.Pixbuf? pixbuf, string? uri) {
             if (_current_music != music) {
                 on_music_changed (music);
             }

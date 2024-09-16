@@ -1,6 +1,6 @@
 project(
   'g4music', [ 'vala', 'c' ],
-  version: '3.2',
+  version: '3.9.2',
   license: 'GPL3'
 )
 
@@ -24,6 +24,9 @@ endif
 adw_dep = dependency('libadwaita-1')
 if adw_dep.version().version_compare('>=1.2.0')
   add_project_arguments('--define=ADW_1_2', language: 'vala')
+endif
+if adw_dep.version().version_compare('>=1.4.0')
+  add_project_arguments('--define=ADW_1_4', language: 'vala')
 endif
 
 libm_dep = c_compiler.find_library('m', required: false)

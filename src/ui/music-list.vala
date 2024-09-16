@@ -1,42 +1,45 @@
 namespace G4 {
 
     public class MusicList : Gtk.Box {
+        private HashTable<Music?, MusicWidget?> _binding_items = new HashTable<Music?, MusicWidget?> (direct_hash, direct_equal);
         private bool _compact_list = false;
-        private int _current_item = -1;
+        private Music? _current_node = null;
         private ListStore _data_store = new ListStore (typeof (Music));
         private Gtk.FilterListModel _filter_model = new Gtk.FilterListModel (null, null);
         private bool _grid_mode = false;
         private Gtk.GridView _grid_view = new Gtk.GridView (null, null);
         private int _image_size = Thumbnailer.ICON_SIZE;
+        private Type _item_type = typeof (Music);
         private Music? _music_node = null;
-        private bool _playable = false;
         private Gtk.ScrolledWindow _scroll_view = new Gtk.ScrolledWindow ();
         private Thumbnailer _thmbnailer;
 
+        private bool _child_drawed = false;
         private uint _columns = 1;
         private uint _row_width = 0;
         private double _row_height = 0;
         private double _scroll_range = 0;
+        private int _scrolling_item = -1;
 
         public signal void item_activated (uint position, Object? obj);
         public signal void item_created (Gtk.ListItem item);
         public signal void item_binded (Gtk.ListItem item);
 
-        public MusicList (Application app, bool playable = false, Music? node = null) {
+        public MusicList (Application app, Type item_type = typeof (Music), Music? node = null) {
             orientation = Gtk.Orientation.VERTICAL;
             hexpand = true;
             append (_scroll_view);
 
-            _playable = playable;
             _filter_model.model = _data_store;
+            _item_type = item_type;
             _music_node = node;
             _thmbnailer = app.thumbnailer;
             update_store ();
 
             _grid_view.enable_rubberband = false;
             _grid_view.max_columns = 5;
-            _grid_view.margin_start = _grid_view.margin_end = 8;
-            _grid_view.margin_top = _grid_view.margin_bottom = 8;
+            _grid_view.margin_start = 6;
+            _grid_view.margin_end = 6;
             _grid_view.single_click_activate = true;
             _grid_view.activate.connect ((position) => item_activated (position, _filter_model.get_item (position)));
             _grid_view.model = new Gtk.NoSelection (_filter_model);
@@ -47,12 +50,6 @@ namespace G4 {
             _scroll_view.vscrollbar_policy = Gtk.PolicyType.AUTOMATIC;
             _scroll_view.vexpand = true;
             _scroll_view.vadjustment.changed.connect (on_vadjustment_changed);
-        }
-
-        public bool playable {
-            get {
-                return _playable;
-            }
         }
 
         public bool compact_list {
@@ -68,15 +65,15 @@ namespace G4 {
             }
         }
 
-        public Object? current_item {
+        public Music? current_node {
             set {
-                if (_filter_model.get_item (_current_item) != value) {
-                    if (_current_item != -1)
-                        _filter_model.items_changed (_current_item, 0, 0);
-                    _current_item = find_item_in_model (_filter_model, value);
-                    if (_current_item != -1)
-                        _filter_model.items_changed (_current_item, 0, 0);
-                }
+                var cur = _binding_items[_current_node];
+                if (cur != null)
+                    ((!)cur).playing = false;
+                _current_node = value;
+                var widget = _binding_items[value];
+                if (widget != null)
+                    ((!)widget).playing = true;
             }
         }
 
@@ -110,10 +107,32 @@ namespace G4 {
             }
         }
 
+        public Type item_type {
+            get {
+                return _item_type;
+            }
+        }
+
+        public Music? music_node {
+            get {
+                return _music_node;
+            }
+        }
+
+        public bool playable {
+            get {
+                return _item_type == typeof (Music);
+            }
+        }
+
         public uint visible_count {
             get {
                 return _filter_model.get_n_items ();
             }
+        }
+
+        public void activate_item (int item) {
+            _grid_view.activate (item);
         }
 
         public void create_factory () {
@@ -122,11 +141,7 @@ namespace G4 {
             factory.bind.connect (on_bind_item);
             factory.unbind.connect (on_unbind_item);
             _grid_view.factory = factory;
-        }
-
-        public void scroll_to_current_item () {
-            if (_current_item != -1)
-                scroll_to_item (_current_item);
+            _child_drawed = false;
         }
 
         private Adw.Animation? _scroll_animation = null;
@@ -144,7 +159,7 @@ namespace G4 {
                 var jump = diff > list_height;
                 if (jump) {
                     // Jump to correct position first
-                    _grid_view.activate_action_variant ("list.scroll-to-item", new Variant.uint32 (index));
+                    scroll_to_item_directly (index);
                 }
                 //  Scroll smoothly
                 var target = new Adw.CallbackAnimationTarget (adj.set_value);
@@ -152,8 +167,34 @@ namespace G4 {
                 _scroll_animation = new Adw.TimedAnimation (_scroll_view, adj.value, scroll_to, jump ? 50 : 500, target);
                 _scroll_animation?.play ();
             } else {
-                _grid_view.activate_action_variant ("list.scroll-to-item", new Variant.uint32 (index));
+                scroll_to_item_directly (index);
+                // Hack: sometime show only first item if no child drawed, so scroll it when first draw an item
+                _scrolling_item = _child_drawed ? -1 : index;
             }
+        }
+
+        public void scroll_to_item_directly (uint index) {
+            _grid_view.activate_action_variant ("list.scroll-to-item", new Variant.uint32 (index));
+        }
+
+        private Gtk.Label? _empty_label = null;
+
+        public void set_empty_text (string? text) {
+            if (_data_store.get_n_items () > 0 && _empty_label != null) {
+                remove ((!)_empty_label);
+                _empty_label = null;
+            } else if (_data_store.get_n_items () == 0 && _empty_label == null) {
+                _empty_label = new Gtk.Label (text);
+                ((!)_empty_label).margin_top = 8;
+                prepend ((!)_empty_label);
+            }
+        }
+
+        public int set_to_current_item (bool scroll = true) {
+            var item = find_item_in_model (_filter_model, _current_node);
+            if (item != -1 && scroll)
+                scroll_to_item (item);
+            return item;
         }
 
         public uint update_store () {
@@ -179,7 +220,10 @@ namespace G4 {
             var item = (Gtk.ListItem) obj;
             var entry = (MusicWidget) item.child;
             var music = (Music) item.item;
+            entry.playing = music == _current_node;
             item_binded (item);
+
+            _binding_items[music] = entry;
 
             var paintable = _thmbnailer.find (music, _image_size);
             if (paintable != null) {
@@ -193,6 +237,11 @@ namespace G4 {
                             entry.paintable = paintable2;
                         }
                     });
+                    _child_drawed = true;
+                    if (_scrolling_item != -1) {
+                        scroll_to_item_directly (_scrolling_item);
+                        _scrolling_item = -1;
+                    }
                 });
             }
         }
@@ -202,6 +251,7 @@ namespace G4 {
             var entry = (MusicWidget) item.child;
             entry.disconnect_first_draw ();
             entry.paintable = null;
+            _binding_items.remove (item.item as Music);
         }
 
         private void on_vadjustment_changed () {

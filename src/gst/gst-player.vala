@@ -24,7 +24,7 @@ namespace G4 {
             });
         }
 
-        private dynamic Gst.Pipeline? _pipeline = Gst.ElementFactory.make ("playbin", "player") as Gst.Pipeline;
+        private dynamic Gst.Pipeline? _pipeline = null;
         private dynamic Gst.Element? _audio_sink = null;
         private dynamic Gst.Element? _replay_gain = null;
         private string _audio_sink_name = "";
@@ -37,7 +37,7 @@ namespace G4 {
         private LevelCalculator _peak_calculator = new LevelCalculator ();
         private Gst.State _state = Gst.State.NULL;
         private bool _seeking = false;
-        private bool _tag_parsed = false;
+        private Gst.TagList? _tag_list = null;
         private uint _timer_handle = 0;
         private unowned Thread<void> _main_thread = Thread<void>.self ();
 
@@ -51,6 +51,16 @@ namespace G4 {
         public signal void tag_parsed (string? uri, Gst.TagList? tags);
 
         public GstPlayer () {
+            uint major = 0, minor = 0, micro = 0, nano = 0;
+            Gst.version (out major, out minor, out micro, out nano);
+            if (major > 1 || (major == 1 && minor >= 24)) {
+                _pipeline = Gst.ElementFactory.make ("playbin3", "player") as Gst.Pipeline;
+                if (_pipeline != null) {
+                    print (@"Use playbin3\n");
+            }
+            } if (_pipeline == null) {
+                _pipeline = Gst.ElementFactory.make ("playbin", "player") as Gst.Pipeline;
+            }
             if (_pipeline != null) {
                 var pipeline = (!)_pipeline;
                 pipeline.async_handling = true;
@@ -112,7 +122,7 @@ namespace G4 {
                     _current_uri = value;
                     _duration = Gst.CLOCK_TIME_NONE;
                     _position = Gst.CLOCK_TIME_NONE;
-                    _tag_parsed = false;
+                    _tag_list = null;
                     ((!)_pipeline).uri = value;
                 }
             }
@@ -154,6 +164,15 @@ namespace G4 {
                 value = double.max (value, _last_peak >= 0.033 ? _last_peak - 0.033 : 0);
                 _last_peak = value;
                 return value;
+            }
+        }
+
+        public Gst.ClockTime position {
+            get {
+                return _position;
+            }
+            set {
+                seek (value);
             }
         }
 
@@ -243,8 +262,10 @@ namespace G4 {
                 case Gst.MessageType.TAG:
                     Gst.TagList? tags = null;
                     message.parse_tag (out tags);
-                    _tag_parsed = true;
-                    tag_parsed (_current_uri, tags);
+                    if (_tag_list != null)
+                        _tag_list?.merge (tags, Gst.TagMergeMode.REPLACE);
+                    else
+                        _tag_list = tags;
                     break;
 
                 default:
@@ -255,11 +276,7 @@ namespace G4 {
         private void on_state_changed (Gst.State old, Gst.State state) {
             if (old == Gst.State.READY && state == Gst.State.PAUSED) {
                 parse_duration ();
-                if (!_tag_parsed) {
-                    //  Hack: force emit if no tag parsed for MOD files
-                    _tag_parsed = true;
-                    tag_parsed (_current_uri, null);
-                }
+                tag_parsed (_current_uri, _tag_list);
             }
             if (old != state && _state != state) {
                 _state = state;
@@ -280,6 +297,7 @@ namespace G4 {
                 next_uri_start ();
                 parse_duration ();
                 parse_position ();
+                tag_parsed (_current_uri, _tag_list);
             }
         }
 
