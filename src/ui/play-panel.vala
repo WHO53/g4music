@@ -1,7 +1,9 @@
 namespace G4 {
 
     [GtkTemplate (ui = "/com/github/neithern/g4music/gtk/play-panel.ui")]
-    public class PlayPanel : Gtk.Box {
+    public class PlayPanel : Gtk.Box, SizeWatcher {
+        [GtkChild]
+        private unowned Gtk.MenuButton action_btn;
         [GtkChild]
         private unowned Gtk.Button back_btn;
         [GtkChild]
@@ -22,7 +24,6 @@ namespace G4 {
         private PlayBar _play_bar = new PlayBar ();
 
         private Application _app;
-        private int _cover_size = 480;
         private double _degrees_per_second = 360 / 20; // 20s per lap
         private CrossFadePaintable _crossfade_paintable = new CrossFadePaintable ();
         private MatrixPaintable _matrix_paintable = new MatrixPaintable ();
@@ -33,16 +34,18 @@ namespace G4 {
 
         public signal void cover_changed (Music? music, CrossFadePaintable cover);
 
-        public PlayPanel (Application app, Window win, Adw.Leaflet leaflet) {
+        public PlayPanel (Application app, Window win, Leaflet leaflet) {
             _app = app;
 
             _play_bar.halign = Gtk.Align.FILL;
-            _play_bar.margin_bottom = 32;
             _play_bar.position_seeked.connect (on_position_seeked);
-            append (_play_bar);
+            music_box.append (_play_bar);
 
             leaflet.bind_property ("folded", back_btn, "visible", BindingFlags.SYNC_CREATE);
-            back_btn.clicked.connect (() => leaflet.navigate (Adw.NavigationDirection.BACK));
+
+            action_btn.set_create_popup_func (() => action_btn.menu_model = create_music_action_menu ());
+
+            back_btn.clicked.connect (leaflet.pop);
 
             initial_label.activate_link.connect (on_music_folder_clicked);
 
@@ -64,8 +67,7 @@ namespace G4 {
 
             app.index_changed.connect (on_index_changed);
             app.music_changed.connect (on_music_changed);
-            app.music_store.items_changed.connect (on_music_items_changed);
-            app.music_tag_parsed.connect (on_music_tag_parsed);
+            app.music_cover_parsed.connect (on_music_cover_parsed);
             app.player.state_changed.connect (on_player_state_changed);
 
             var settings = app.settings;
@@ -95,24 +97,39 @@ namespace G4 {
             }
         }
 
-        public void size_allocated () {
+        public void first_allocated () {
             // Delay update info after the window size allocated to avoid showing slowly
             _size_allocated = true;
-            if (_current_music != _app.current_music) {
-                update_music_info (_app.current_music);
+            if (_app.current_music != _current_music || _current_music == null) {
+                on_music_changed (_app.current_music);
             }
         }
 
-        public void size_to_change (int panel_width) {
-            var max_size = int.max (panel_width * 3 / 4, music_cover.pixel_size);
-            var margin = int.max ((panel_width - max_size) / 2, 32);
-            music_cover.margin_start = margin;
-            music_cover.margin_end = margin;
+        public void size_to_change (int width, int height) {
+            var max_size = int.max (width * 3 / 4, music_cover.pixel_size);
+            var margin_horz = (width - max_size) / 2;
+            var margin_cover = int.max (margin_horz, 32);
+            music_cover.margin_start = margin_cover;
+            music_cover.margin_end = margin_cover;
 
-            margin -= 8;
-            _play_bar.margin_start = margin;
-            _play_bar.margin_end = margin;
-            _play_bar.on_size_changed (panel_width - margin * 2);
+            var margin_bar = int.max (margin_horz / 2, 16);
+            var spacing = (height - 540).clamp (8, 16);
+            _play_bar.margin_start = margin_bar;
+            _play_bar.margin_end = margin_bar;
+            _play_bar.margin_top = spacing;
+            _play_bar.margin_bottom = spacing * 2;
+            _play_bar.on_size_changed (width - margin_bar * 2, spacing);
+        }
+
+        private Menu create_music_action_menu () {
+            var music = _app.current_music ?? new Music.empty ();
+            var menu = create_menu_for_music (music);
+            if (music.cover_uri != null) {
+                menu.append_item (create_menu_item_for_uri ((!)music.cover_uri, _("Show _Cover File"), ACTION_APP + ACTION_SHOW_FILE));
+            } else if (_app.current_cover != null) {
+                menu.append_item (create_menu_item_for_uri (music.uri, _("_Export Cover"), ACTION_APP + ACTION_EXPORT_COVER));
+            }
+            return menu;
         }
 
         private void on_index_changed (int index, uint size) {
@@ -121,13 +138,23 @@ namespace G4 {
             index_label.label = size > 0 ? @"$(index+1)/$(size)" : "";
         }
 
-        private Music? _current_music = new Music.empty ();
+        private Music? _current_music = null;
 
         private void on_music_changed (Music? music) {
-            if (_size_allocated) {
-                update_music_info (music);
+            music_album.label = music?.album ?? "";
+            music_artist.label = music?.artist ?? "";
+            music_title.label = music?.title ?? "";
+
+            var empty = music == null;
+            initial_label.visible = empty;
+            if (empty) {
+                update_cover_paintables (music, _app.icon);
+                update_initial_label (_app.music_folder);
             }
-            root.action_set_enabled (ACTION_APP + ACTION_PLAY_PAUSE, music != null);
+
+            action_btn.sensitive = !empty;
+            root.action_set_enabled (ACTION_APP + ACTION_PLAY_PAUSE, !empty);
+            (_app.active_window as Window)?.set_title (music?.get_artist_and_title () ?? _app.name);
         }
 
         private bool on_music_folder_clicked (string uri) {
@@ -137,52 +164,10 @@ namespace G4 {
             return true;
         }
 
-        private uint _pending_mic_handler = 0;
-
-        private void on_music_items_changed (uint position, uint removed, uint added) {
-            if (_pending_mic_handler != 0)
-                Source.remove (_pending_mic_handler);
-            _pending_mic_handler = run_idle_once (() => {
-                _pending_mic_handler = 0;
-                var visible = !_app.loading && _app.current_music == null
-                        && _app.music_store.get_n_items () == 0;
-                initial_label.visible = visible;
-                if (visible)
-                    update_initial_label (_app.music_folder);
-            });
-        }
-
-        private async void on_music_tag_parsed (Music music, Gst.Sample? image) {
-            Gdk.Pixbuf? pixbuf = null;
-            Gdk.Paintable? paintable = null;
-            var thumbnailer = _app.thumbnailer;
-            if (image != null) {
-                pixbuf = yield run_async<Gdk.Pixbuf?> (
-                    () => load_clamp_pixbuf_from_sample ((!)image, _cover_size * scale_factor), true);
-                if (pixbuf != null)
-                    paintable = Gdk.Texture.for_pixbuf ((!)pixbuf);
-            } else {
-                paintable = yield thumbnailer.load_async (music, _cover_size);
-            }
-            if (music == _app.current_music) {
-                //  Remote thumbnail may not loaded
-                if (pixbuf != null && !(thumbnailer.find (music) is Gdk.Texture)) {
-                    pixbuf = yield run_async<Gdk.Pixbuf?> (
-                        () => create_clamp_pixbuf ((!)pixbuf, Thumbnailer.ICON_SIZE * scale_factor)
-                    );
-                    if (pixbuf != null && music == _app.current_music) {
-                        thumbnailer.put (music, Gdk.Texture.for_pixbuf ((!)pixbuf), true);
-                        _app.rebind_current_item ();
-                    }
-                }
-
-                if (music == _app.current_music) {
-                    if (paintable == null)
-                        paintable = thumbnailer.create_music_text_paintable (music);
-                    update_cover_paintables (music, paintable);
-                    yield _app.parse_music_cover_async ();
-                }
-            }
+        private async void on_music_cover_parsed (Music music, Gdk.Pixbuf? pixbuf, string? uri) {
+            var paintable = pixbuf != null ? Gdk.Texture.for_pixbuf ((!)pixbuf)
+                            : _app.thumbnailer.create_music_text_paintable (music);
+            update_cover_paintables (music, paintable);
         }
 
         private Adw.Animation? _scale_animation = null;
@@ -231,37 +216,11 @@ namespace G4 {
 
         private void show_popover_menu (Gtk.Widget widget, double x, double y) {
             if (_app.current_music != null) {
-                var music = (!)_app.current_music;
-                var menu = create_menu_for_music (music);
-                if (music.cover_uri != null) {
-                    menu.append_item (create_menu_item_for_uri ((!)music.cover_uri, _("Show _Cover File"), ACTION_APP + ACTION_SHOW_FILE));
-                } else if (_app.current_cover != null) {
-                    menu.append_item (create_menu_item_for_uri (music.uri, _("_Export Cover"), ACTION_APP + ACTION_EXPORT_COVER));
-                }
+                var menu = create_music_action_menu ();
                 var popover = create_popover_menu (menu, x, y);
                 popover.set_parent (widget);
                 popover.popup ();
             }
-        }
-
-        private void update_music_info (Music? music) {
-            var empty = music == null && _app.music_store.get_n_items () == 0;
-            _current_music = music;
-            if (empty) {
-                update_cover_paintables (music, _app.icon);
-                initial_label.visible = empty && !_app.loading;
-            }
-
-            music_album.visible = !empty;
-            music_artist.visible = !empty;
-            music_title.visible = !empty;
-            music_album.label = music?.album ?? "";
-            music_artist.label = music?.artist ?? "";
-            music_title.label = music?.title ?? "";
-
-            var win = _app.active_window;
-            if (win is Window)
-                ((!)win).title = music?.get_artist_and_title () ?? _app.name;
         }
 
         private void update_cover_paintables (Music? music, Gdk.Paintable? paintable) {

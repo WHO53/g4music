@@ -7,67 +7,25 @@ namespace G4 {
         public const string PLAYLIST = "playlist";
     }
 
-    public class StableLabel : Gtk.Widget {
-        private static Gtk.Builder _builder = new Gtk.Builder ();
-
-        private Gtk.Label _label = new Gtk.Label (null);
-
-        construct {
-            add_child (_builder, _label, null);
-        }
-
-        ~StableLabel () {
-            _label.unparent ();
-        }
-
-        public Pango.EllipsizeMode ellipsize {
-            get {
-                return _label.ellipsize;
-            }
-            set {
-                _label.ellipsize = value;
-            }
-        }
-
-        public string label {
-            get {
-                return _label.label;
-            }
-            set {
-                _label.label = value;
-            }
-        }
-
-        public override void measure (Gtk.Orientation orientation, int for_size, out int minimum, out int natural, out int minimum_baseline, out int natural_baseline) {
-            if (orientation == Gtk.Orientation.VERTICAL) {
-                // Ensure enough space for different text
-                var text = _label.label;
-                _label.label = "A中";
-                _label.measure (orientation, for_size, out minimum, out natural, out minimum_baseline, out natural_baseline);
-                _label.label = text;
-            } else {
-                _label.measure (orientation, for_size, out minimum, out natural, out minimum_baseline, out natural_baseline);
-            }
-        }
-
-        public override void size_allocate (int width, int height, int baseline) {
-            var allocation = Gtk.Allocation ();
-            allocation.x = 0;
-            allocation.y = 0;
-            allocation.width = width;
-            allocation.height = height;
-            _label.allocate_size (allocation, baseline);
-        }
-    }
-
     public class MusicWidget : Gtk.Box {
         protected Gtk.Image _cover = new Gtk.Image ();
         protected StableLabel _title = new StableLabel ();
         protected StableLabel _subtitle = new StableLabel ();
         protected RoundPaintable _paintable = new RoundPaintable ();
+        protected Gtk.Image _playing = new Gtk.Image ();
 
         public ulong first_draw_handler = 0;
         public Music? music = null;
+
+        public MusicWidget () {
+            _playing.halign = Gtk.Align.END;
+            _playing.valign = Gtk.Align.CENTER;
+            _playing.icon_name = "media-playback-start-symbolic";
+            _playing.margin_end = 4;
+            _playing.pixel_size = 10;
+            _playing.visible = false;
+            _playing.add_css_class ("dim-label");
+        }
 
         public RoundPaintable cover {
             get {
@@ -78,6 +36,15 @@ namespace G4 {
         public Gdk.Paintable? paintable {
             set {
                 _paintable.paintable = value;
+            }
+        }
+
+        public bool playing {
+            get {
+                return _playing.visible;
+            }
+            set {
+                _playing.visible = value;
             }
         }
 
@@ -114,11 +81,11 @@ namespace G4 {
     }
 
     public class MusicCell : MusicWidget {
-
         public MusicCell () {
             orientation = Gtk.Orientation.VERTICAL;
             margin_top = 10;
             margin_bottom = 10;
+            width_request = 200;
 
             _cover.margin_start = 8;
             _cover.margin_end = 8;
@@ -126,17 +93,21 @@ namespace G4 {
             _cover.pixel_size = 160;
             _cover.paintable = _paintable;
             _paintable.queue_draw.connect (_cover.queue_draw);
-            append (_cover);
+
+            var overlay = new Gtk.Overlay ();
+            overlay.child = _cover;
+            overlay.add_overlay (_playing);
+            append (overlay);
 
             _title.halign = Gtk.Align.CENTER;
-            _title.ellipsize = Pango.EllipsizeMode.MIDDLE;
+            _title.ellipsize = EllipsizeMode.MIDDLE;
             _title.margin_start = 2;
             _title.margin_end = 2;
             _title.add_css_class ("title-leading");
             append (_title);
 
             _subtitle.halign = Gtk.Align.CENTER;
-            _subtitle.ellipsize = Pango.EllipsizeMode.MIDDLE;
+            _subtitle.ellipsize = EllipsizeMode.MIDDLE;
             _subtitle.margin_start = 2;
             _subtitle.margin_end = 2;
             _subtitle.visible = false;
@@ -145,8 +116,6 @@ namespace G4 {
             if (font_size >= 13)
                 _subtitle.add_css_class ("title-secondly");
             append (_subtitle);
-
-            width_request = 200;
         }
 
         public override Menu create_item_menu () {
@@ -160,9 +129,9 @@ namespace G4 {
     }
 
     public class MusicEntry : MusicWidget {
-        private Gtk.Image _playing = new Gtk.Image ();
-
         public MusicEntry (bool compact = true) {
+            width_request = 324;
+
             var cover_margin = compact ? 3 : 4;
             var cover_size = compact ? 36 : 48;
             _cover.margin_top = cover_margin;
@@ -173,6 +142,7 @@ namespace G4 {
             _paintable.queue_draw.connect (_cover.queue_draw);
             append (_cover);
 
+            var overlay = new Gtk.Overlay ();
             var spacing = compact ? 2 : 6;
             var vbox = new Gtk.Box (Gtk.Orientation.VERTICAL, spacing);
             vbox.hexpand = true;
@@ -181,34 +151,20 @@ namespace G4 {
             vbox.margin_end = 4;
             vbox.append (_title);
             vbox.append (_subtitle);
-            append (vbox);
+            overlay.child = vbox;
+            overlay.add_overlay (_playing);
+            append (overlay);
 
             _title.halign = Gtk.Align.START;
-            _title.ellipsize = Pango.EllipsizeMode.END;
+            _title.ellipsize = EllipsizeMode.END;
             _title.add_css_class ("title-leading");
 
             _subtitle.halign = Gtk.Align.START;
-            _subtitle.ellipsize = Pango.EllipsizeMode.END;
+            _subtitle.ellipsize = EllipsizeMode.END;
             _subtitle.add_css_class ("dim-label");
             var font_size = _subtitle.get_pango_context ().get_font_description ().get_size () / Pango.SCALE;
             if (font_size >= 13)
                 _subtitle.add_css_class ("title-secondly");
-
-            _playing.valign = Gtk.Align.CENTER;
-            _playing.icon_name = "media-playback-start-symbolic";
-            _playing.pixel_size = 10;
-            _playing.margin_end = 4;
-            _playing.visible = false;
-            _playing.add_css_class ("dim-label");
-            append (_playing);
-
-            width_request = 328;
-        }
-
-        public bool playing {
-            set {
-                _playing.visible = value;
-            }
         }
 
         public void set_titles (Music music, uint sort) {

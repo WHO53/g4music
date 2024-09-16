@@ -1,8 +1,8 @@
 namespace G4 {
 
     public class Window : Adw.ApplicationWindow {
-        private Adw.Leaflet _leaflet = new Adw.Leaflet ();
-        private MiniBar _mini_bar = new MiniBar ();
+        private Leaflet _leaflet = new Leaflet ();
+        private Gtk.ProgressBar _progress_bar = new Gtk.ProgressBar ();
         private PlayPanel _play_panel;
         private StorePanel _store_panel;
 
@@ -10,8 +10,6 @@ namespace G4 {
         private uint _bkgnd_blur = BlurMode.ALWAYS;
         private CrossFadePaintable _bkgnd_paintable = new CrossFadePaintable ();
         private Gdk.Paintable? _cover_paintable = null;
-        private int _window_width = 0;
-        private int _window_height = 0;
 
         public Window (Application app) {
             this.application = app;
@@ -19,30 +17,35 @@ namespace G4 {
             this.title = app.name;
             this.close_request.connect (on_close_request);
 
-            var handle = new Gtk.WindowHandle ();
-            handle.child = _leaflet;
-            this.content = handle;
+            var overlay = new Gtk.Overlay ();
+            this.content = overlay;
+
+            _progress_bar.hexpand = true;
+            _progress_bar.margin_top = 46;  // at the bottom of the header_bar
+            _progress_bar.pulse_step = 0.02;
+            _progress_bar.sensitive = false;
+            _progress_bar.visible = false;
+            _progress_bar.add_css_class ("osd");
+            overlay.child = _leaflet;
+            overlay.add_overlay (_progress_bar);
+            app.loader.loading_changed.connect (on_loading_changed);
 
             _bkgnd_paintable.queue_draw.connect (this.queue_draw);
 
-            var revealer = new Gtk.Revealer ();
-            revealer.child = _mini_bar;
-            revealer.transition_type = Gtk.RevealerTransitionType.SLIDE_DOWN;
-            _mini_bar.activated.connect (() => _leaflet.navigate (Adw.NavigationDirection.FORWARD));
-
             _store_panel = new StorePanel (app, this, _leaflet);
-            _store_panel.append (revealer);
 
             _play_panel = new PlayPanel (app, this, _leaflet);
             _play_panel.cover_changed.connect (on_cover_changed);
 
-            _leaflet.append (_store_panel);
-            _leaflet.append (_play_panel);
-            _leaflet.bind_property ("folded", revealer, "reveal-child", BindingFlags.SYNC_CREATE);
+            _leaflet.content = _play_panel;
+            _leaflet.sidebar = _store_panel;
 
             setup_drop_target ();
+            setup_focus_controller ();
 
             var settings = app.settings;
+            settings.bind ("leaflet-mode", _leaflet, "visible-mode", SettingsBindFlags.DEFAULT);
+            settings.bind ("maximized", this, "maximized", SettingsBindFlags.DEFAULT);
             settings.bind ("width", this, "default-width", SettingsBindFlags.DEFAULT);
             settings.bind ("height", this, "default-height", SettingsBindFlags.DEFAULT);
             settings.bind ("blur-mode", this, "blur-mode", SettingsBindFlags.DEFAULT);
@@ -54,74 +57,33 @@ namespace G4 {
             }
             set {
                 _bkgnd_blur = value;
-                if (_window_height > 0)
+                if (get_height () > 0)
                     update_background ();
             }
         }
 
-        public override void size_allocate (int width, int height, int baseline) {
-            var min_width = 340;
-            var play_width = int.max (width * 3 / 8, min_width);
-            var store_width = int.max (width - play_width, min_width);
-            var wide = width > min_width * 2;
-            _play_panel.size_to_change (wide ? play_width : width);
-            _store_panel.size_to_change (wide ? store_width : width);
-            _mini_bar.size_to_change (wide ? store_width : width);
-
-            base.size_allocate (width, height, baseline);
-
-            var rtl = get_direction () == Gtk.TextDirection.RTL;
-            var left_width = rtl ? play_width : store_width;
-            var right_width = rtl ? store_width : play_width;
-            var left_panel = rtl ? (Gtk.Widget) _play_panel : (Gtk.Widget) _store_panel;
-            var right_panel = rtl ? (Gtk.Widget) _store_panel : (Gtk.Widget) _play_panel;
-            var allocation = Gtk.Allocation ();
-            allocation.x = allocation.y = 0;
-            if (_leaflet.folded) {
-                allocation.width = width;
-                allocation.height = height;
-                _leaflet.get_visible_child ()?.allocate_size (allocation, baseline);
-            } else {
-                allocation.width = left_width;
-                allocation.height = height;
-                left_panel.allocate_size (allocation, baseline);
-                allocation.x = width - right_width;
-                allocation.width = right_width;
-                right_panel.allocate_size (allocation, baseline);
+        public bool focused_visible {
+            get {
+                return focus_visible;
             }
-
-            if (_window_width == 0 && width > 0) {
-                run_idle_once (() => {
-                    _play_panel.size_allocated ();
-                    _store_panel.size_allocated ();
-                });
+            set {
+                if (!value)
+                    focus_to_play_later ();
             }
-            _window_width = width;
-            _window_height = height;
+        }
+
+        public Gtk.Widget focused_widget {
+            owned get {
+                return focus_widget;
+            }
+            set {
+                if (!(value is Gtk.Editable))
+                    focus_to_play_later (2000);
+            }
         }
 
         public override void snapshot (Gtk.Snapshot snapshot) {
-            var width = _window_width;
-            var height = _window_height;
-            _bkgnd_paintable.snapshot (snapshot, width, height);
-            if (!_leaflet.folded) {
-                var page = (Adw.LeafletPage) _leaflet.pages.get_item (0);
-                var size = page.child.get_width ();
-                var rtl = get_direction () == Gtk.TextDirection.RTL;
-                var line_width = scale_factor >= 2 ? 0.5f : 1;
-                var rect = Graphene.Rect ();
-                rect.init (rtl ? width - size : size, 0, line_width, height);
-                var color = Gdk.RGBA ();
-                color.red = color.green = color.blue = color.alpha = 0;
-#if GTK_4_10
-                var color2 = get_color ();
-#else
-                var color2 = get_style_context ().get_color ();
-#endif
-                color2.alpha = 0.25f;
-                Gsk.ColorStop[] stops = { { 0, color }, { 0.5f, color2 }, { 1, color } };
-                snapshot.append_linear_gradient (rect, rect.get_top_left (), rect.get_bottom_right (), stops);
-            }
+            _bkgnd_paintable.snapshot (snapshot, get_width (), get_height ());
             base.snapshot (snapshot);
         }
 
@@ -132,21 +94,30 @@ namespace G4 {
         public void start_search (string text, uint mode = SearchMode.ANY) {
             _store_panel.start_search (text, mode);
             if (_leaflet.folded) {
-                _leaflet.navigate (Adw.NavigationDirection.BACK);
+                _leaflet.pop ();
             }
         }
 
         public void toggle_search () {
             if (_store_panel.toggle_search () && _leaflet.folded) {
-                _leaflet.navigate (Adw.NavigationDirection.BACK);
+                _leaflet.pop ();
             }
+        }
+
+        private void focus_to_play_later (int delay = 100) {
+            run_timeout_once (delay, () => {
+                if (!focus_visible && !(focus_widget is Gtk.Editable)) {
+                    var button = find_button_by_action_name (_leaflet, ACTION_APP + ACTION_PLAY_PAUSE);
+                    button?.grab_focus ();
+                }
+            });
         }
 
         private bool on_close_request () {
             var app = (Application) application;
             if (app.player.playing && app.settings.get_boolean ("play-background")) {
                 app.request_background ();
-                this.hide ();
+                this.visible = false;
                 return true;
             }
             return false;
@@ -162,8 +133,8 @@ namespace G4 {
             _cover_paintable = paintable;
 
             var app = (Application) application;
-            _mini_bar.cover = music != null ? (app.thumbnailer.find ((!)music)  ?? _cover_paintable) : app.icon;
-            _mini_bar.title = music?.title ?? "";
+            var mini_cover = music != null ? (app.thumbnailer.find ((!)music) ?? _cover_paintable) : app.icon;
+            _store_panel.set_mini_cover_and_title (mini_cover, music?.title ?? "");
             update_background ();
 
             var target = new Adw.CallbackAnimationTarget ((value) => {
@@ -209,6 +180,37 @@ namespace G4 {
             return true;
         }
 
+        private bool _loading = false;
+        private uint _tick_handler = 0;
+
+        private void on_loading_changed (bool loading) {
+            root.action_set_enabled (ACTION_APP + ACTION_RELOAD, !loading);
+
+            _loading = loading;
+            if (loading) {
+                run_timeout_once (100, () => _progress_bar.visible = _loading);
+            } else {
+                _progress_bar.visible = _loading;
+            }
+
+            if (loading && _tick_handler == 0) {
+                _tick_handler = add_tick_callback (on_loading_tick_callback);
+            } else if (!loading && _tick_handler != 0) {
+                remove_tick_callback (_tick_handler);
+                _tick_handler = 0;
+            }
+        }
+
+        private bool on_loading_tick_callback (Gtk.Widget widget, Gdk.FrameClock clock) {
+            var app = (Application) application;
+            var fraction = app.loader.loading_progress;
+            if (fraction > 0)
+                _progress_bar.fraction = fraction;
+            else
+                _progress_bar.pulse ();
+            return true;
+        }
+
         private void setup_drop_target () {
             //  Hack: when drag a folder from nautilus,
             //  the value is claimed as GdkFileList in accept(),
@@ -225,15 +227,40 @@ namespace G4 {
             this.content.add_controller (target);
         }
 
+        private void setup_focus_controller () {
+            var controller = new Gtk.EventControllerFocus ();
+            controller.enter.connect (() => focused_visible = false);
+            this.content.add_controller (controller);
+            this.bind_property ("focus_visible", this, "focused_visible");
+            this.bind_property ("focus_widget", this, "focused_widget");
+        }
+
         private void update_background () {
             var paintable = _cover_paintable;
             if ((_bkgnd_blur == BlurMode.ALWAYS && paintable != null)
                 || (_bkgnd_blur == BlurMode.ART_ONLY && paintable is Gdk.Texture)) {
                 _bkgnd_paintable.paintable = create_blur_paintable (this,
-                    (!)paintable, _blur_size, _blur_size, 80, 0.25);
+                    (!)paintable, _blur_size, _blur_size * 0.2, 0.25);
             } else {
                 _bkgnd_paintable.paintable = null;
             }
         }
+    }
+
+    public Gtk.Button? find_button_by_action_name (Gtk.Widget widget, string action) {
+        for (var child = widget.get_first_child (); child != null; child = child?.get_next_sibling ()) {
+            if (!((!)child).is_drawable ()) {
+                continue;
+            } else if (child is Gtk.Button) {
+                var button = (Gtk.Button) child;
+                if (button.action_name == action)
+                    return button;
+            } else {
+                var button = find_button_by_action_name ((!)child, action);
+                if (button != null)
+                    return button;
+            }
+        }
+        return null;
     }
 }

@@ -1,7 +1,7 @@
 {
     "app-id": "com.github.neithern.g4music",
     "runtime": "org.gnome.Platform",
-    "runtime-version": "44",
+    "runtime-version": "46",
     "sdk": "org.gnome.Sdk",
     "command": "g4music",
     "finish-args": [
@@ -15,7 +15,7 @@
         "--filesystem=xdg-music:ro",
         "--filesystem=xdg-run/gvfsd",
         "--filesystem=xdg-run/pipewire-0:ro",
-        "--own-name=org.mpris.MediaPlayer2.G4Music",
+        "--own-name=org.mpris.MediaPlayer2.Gapless",
         "--talk-name=org.gnome.Shell",
         "--talk-name=org.gtk.vfs.*"
     ],
