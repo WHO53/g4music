@@ -1,7 +1,7 @@
-Source: g4music
+Source: gapless
 Section: misc
 Priority: optional
-Maintainer: Bardia Moshiri <fakeshell@bardia.tech>
+Maintainer: Droidian Project <info@droidian.org>
 Build-Depends: debhelper-compat (= 13),
                valac,
                meson,
@@ -16,10 +16,17 @@ Build-Depends: debhelper-compat (= 13),
                desktop-file-utils,
                libdbus-1-dev
 
-Package: g4music
+Package: gapless
 Architecture: any
 Depends: ${shlibs:Depends}, 
          ${misc:Depends}, 
          dbus
+Breaks: g4music (<< 3.3)
+Replaces: g4music (<< 3.3)
 Description: A fast, fluent, light weight music player written in GTK4,
  with a beautiful, adaptive user interface, focuses on high performance.
+
+Package: g4music
+Architecture: all
+Depends: gapless (= ${binary:Version})
+Description: A fast, fluent, light weight music player written in GTK4 - transitional package
