@@ -23,6 +23,7 @@ Depends: ${shlibs:Depends},
          dbus
 Breaks: g4music (<< 3.3)
 Replaces: g4music (<< 3.3)
+Conflicts: g4music (<< 3.3)
 Description: A fast, fluent, light weight music player written in GTK4,
  with a beautiful, adaptive user interface, focuses on high performance.
 
