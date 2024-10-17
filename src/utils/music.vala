@@ -23,7 +23,7 @@ namespace G4 {
         protected string _artist_key = "";
         protected string _title_key = "";
         private string? _cover_key = null;
-        private int _order = 0;
+        protected int _order = 0;
 
         public Music (string uri, string title, int64 time) {
             this.title = title;
@@ -43,6 +43,12 @@ namespace G4 {
         public unowned string album_key {
             get {
                 return _album_key;
+            }
+        }
+
+        public unowned string artist_name {
+            get {
+                return album_artist.length > 0 ? album_artist : artist;
             }
         }
 
@@ -104,22 +110,26 @@ namespace G4 {
                 changed = true;
             }
             Gst.DateTime? dt = null;
-            uint dt2 = 0;
+            uint dtu = 0;
             if (tags.get_date_time (Gst.Tags.DATE_TIME, out dt)
-                    && dt != null && (dt2 = gst_date_time_to_uint (dt)) != date) {
-                date = dt2;
+                    && dt != null && (dtu = gst_date_time_to_uint (dt)) != date) {
+                date = dtu;
                 changed = true;
             }
-            uint tr = 0;
-            if (tags.get_uint (Gst.Tags.TRACK_NUMBER, out tr)
-                    && (int) tr > 0 && track != tr) {
-                track = (int) tr;
+            if ((dt = parse_gst_original_date (tags)) != null
+                    && dt != null && (dtu = gst_date_time_to_uint (dt)) != date) {
+                date = dtu;
                 changed = true;
             }
-            uint album_disc = 0;
-            if (tags.get_uint (Gst.Tags.ALBUM_VOLUME_NUMBER, out album_disc)
-                && (int) album_disc > 0 && disc != album_disc) { 
-                disc = (int) album_disc;
+            uint tn = 0, avn = 0;
+            if (tags.get_uint (Gst.Tags.TRACK_NUMBER, out tn)
+                    && (int) tn > 0 && track != tn) {
+                track = (int) tn;
+                changed = true;
+            }
+            if (tags.get_uint (Gst.Tags.ALBUM_VOLUME_NUMBER, out avn)
+                && (int) avn > 0 && disc != avn) {
+                disc = (int) avn;
                 changed = true;
             }
             Gst.Sample? sample = null;
@@ -132,6 +142,10 @@ namespace G4 {
                 update_album_key ();
             }
             return changed;
+        }
+
+        public bool has_unknown () {
+            return title.length == 0 || artist == UNKNOWN_ARTIST || album == UNKNOWN_ALBUM;
         }
 
         public Music.deserialize (DataInputBytes dis) throws IOError {
@@ -188,26 +202,26 @@ namespace G4 {
 
                 int track_index = 0;
                 var pos = name.index_of_char ('.');
-                if (pos > 0) {
+                if (pos > 0 && pos < name.length - 1) {
                     // assume prefix number as track index
-                    int.try_parse (name.substring (0, pos), out track_index, null, 10);
-                    name = name.substring (pos + 1);
+                    if (int.try_parse (name.substring (0, pos), out track_index, null, 10))
+                        name = name.substring (pos + 1);
                 }
 
                 //  split the file name by '-'
-                var sa = split_string (name, "-");
+                var sa = name.split ("-");
                 var len = sa.length;
                 if (title.length == 0) {
-                    title = len >= 1 ? sa[len - 1] : name;
+                    title = len >= 1 ? sa[len - 1].strip () : name;
                     _title_key = title.collate_key_for_filename ();
                 }
                 if (artist.length == 0) {
-                    artist = len >= 2 ? sa[len - 2] : UNKNOWN_ARTIST;
+                    artist = len >= 2 ? sa[len - 2].strip () : UNKNOWN_ARTIST;
                     _artist_key = artist.collate_key_for_filename ();
                 }
                 if (track_index == 0) {
                     if (track_index == 0 && len >= 3)
-                        int.try_parse (sa[0], out track_index, null, 10);
+                        int.try_parse (sa[0].strip (), out track_index, null, 10);
                     if (track_index > 0)
                         this.track = track_index;
                 }
@@ -276,6 +290,25 @@ namespace G4 {
             return 0;
         }
 
+        public static Gst.DateTime? parse_gst_original_date (Gst.TagList tags) {
+            Gst.DateTime? date = null;
+            Gst.DateTime? year = null;
+            var ec_size = tags.get_tag_size (Gst.Tags.EXTENDED_COMMENT);
+            for (int i = 0; i < ec_size; i++) {
+                string? s = null;
+                if (tags.peek_string_index (Gst.Tags.EXTENDED_COMMENT, i, out s) && s != null) {
+                    var str = (!)s;
+                    if (str.has_prefix ("ORIGINALDATE="))
+                        date = new Gst.DateTime.from_iso8601_string (str.substring (13));
+                    else if (str.has_prefix ("ORIGINALYEAR="))
+                        year = new Gst.DateTime.from_iso8601_string (str.substring (13));
+                    if (date != null && year != null)
+                        break;
+                }
+            }
+            return date ?? year;
+        }
+
         public static void original_order (GenericArray<Music> arr) {
             for (var i = arr.length - 1; i >= 0; i--) {
                 arr[i]._order = i;
@@ -284,7 +317,7 @@ namespace G4 {
 
         public static void shuffle_order (GenericArray<Music> arr) {
             for (var i = arr.length - 1; i > 0; i--) {
-                var r = Random.int_range (0, i);
+                var r = Random.int_range (0, i + 1);
                 var s = arr[i];
                 arr[i] = arr[r];
                 arr[r] = s;
@@ -332,9 +365,11 @@ namespace G4 {
     public string parse_abbreviation (string text) {
         var sb = new StringBuilder ();
         var char_count = 0;
-        foreach (var s in text.split (" ")) {
-            var c = find_first_letter (s);
-            if (c > 0) {
+        var arr = text.tokenize_and_fold ("", null);
+        for (var i = 0; i < arr.length && char_count < 2; i++) {
+            unowned var s = arr[i];
+            unichar c = 0;
+            if (s.ascii_ncasecmp ("feat", 4) != 0 && (c = find_first_letter (s)) > 0) {
                 sb.append_unichar (c);
                 char_count++;
                 if (char_count >= 2)
@@ -349,16 +384,5 @@ namespace G4 {
             return text.substring (0, index).up ();
         }
         return text.up ();
-    }
-
-    public GenericArray<string> split_string (string text, string delimiter) {
-        var ar = text.split ("-");
-        var sa = new GenericArray<string> (ar.length);
-        foreach (var str in ar) {
-            var s = str.strip ();
-            if (s.length > 0)
-                sa.add (s);
-        }
-        return sa;
     }
 }

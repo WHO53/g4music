@@ -1,13 +1,18 @@
 namespace G4 {
 
-    public interface SizeWatcher {
-        public abstract void first_allocated ();
-        public abstract void size_to_change (int width, int height);
+    namespace ContentWidth {
+        public const int MIN = 340;
+        public const int MAX = 480;
     }
 
     namespace LeafletMode {
         public const int SIDEBAR = 1;
         public const int CONTENT = 2;
+    }
+
+    public interface SizeWatcher {
+        public abstract void first_allocated ();
+        public abstract void size_to_change (int width, int height);
     }
 
     public class Leaflet : Gtk.Widget {
@@ -19,8 +24,8 @@ namespace G4 {
 
         private bool _folded = false;
         private float _content_fraction = 3/8f;
-        private int _content_min_width = 340;
-        private int _content_max_width = 480;
+        private int _content_min_width = ContentWidth.MIN;
+        private int _content_max_width = ContentWidth.MAX;
         private int _view_width = 0;
         private int _view_height = 0;
         private int _visible_mode = LeafletMode.SIDEBAR;
@@ -174,7 +179,7 @@ namespace G4 {
                 var size = _sidebar.get_width ();
                 var rtl = get_direction () == Gtk.TextDirection.RTL;
                 var rect = Graphene.Rect ();
-                rect.init (rtl ? _view_width - size : size, 0, scale_factor * 0.25f, _view_height);
+                rect.init (rtl ? _view_width - size : size, 0, 0.5f, _view_height);
                 var color = Gdk.RGBA ();
                 color.red = color.green = color.blue = color.alpha = 0;
 #if GTK_4_10
@@ -200,8 +205,6 @@ namespace G4 {
         private Adw.NavigationPage? _last_page = null;
         private Adw.NavigationView _widget = new Adw.NavigationView ();
 
-        public signal void popped (Gtk.Widget? child);
-
         public Stack (bool retain_last_popped = false) {
             _retain_last_popped = retain_last_popped;
             _widget = new Adw.NavigationView ();
@@ -212,7 +215,6 @@ namespace G4 {
                 notify_property ("visible-child");
             });
             _widget.popped.connect((page) => {
-                popped (page.child);
                 notify_property ("visible-child");
                 if (_retain_last_popped)
                     _last_page = page;
@@ -320,8 +322,6 @@ namespace G4 {
     public class Stack : Object {
         private Gtk.Stack _widget = new Gtk.Stack ();
 
-        public signal void popped (Gtk.Widget? child);
-
         public Stack (bool retain_last_popped = false) {
             _widget = new Gtk.Stack ();
             animate_transitions = true;
@@ -358,10 +358,12 @@ namespace G4 {
         }
 
         public Gtk.Widget add (Gtk.Widget child, string? tag = null) {
-            var overlay = new Adw.Bin ();
-            overlay.child = child;
-            _widget.add_named (overlay, tag);
-            return overlay;
+            var bin = new Adw.Bin ();
+            bin.child = child;
+            _widget.add_named (bin, tag);
+            _widget.visible_child = bin;
+            notify_property ("visible-child");
+            return bin;
         }
 
         public void pop () {
@@ -369,7 +371,6 @@ namespace G4 {
             var previous = child?.get_prev_sibling ();
             if (child != null && previous != null) {
                 _widget.visible_child = (!)previous;
-                popped (child);
                 notify_property ("visible-child");
                 run_timeout_once (_widget.transition_duration, () => {
                     _widget.remove ((!)child);

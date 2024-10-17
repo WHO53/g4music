@@ -3,19 +3,32 @@ namespace G4 {
     public const string ACTION_APP = "app.";
     public const string ACTION_ABOUT = "about";
     public const string ACTION_PREFS = "preferences";
+    public const string ACTION_ADD_TO_PLAYLIST = "add-to-playlist";
+    public const string ACTION_ADD_TO_QUEUE = "add-to-queue";
     public const string ACTION_EXPORT_COVER = "export-cover";
     public const string ACTION_PLAY = "play";
     public const string ACTION_PLAY_AT_NEXT = "play-at-next";
     public const string ACTION_PLAY_PAUSE = "play-pause";
     public const string ACTION_PREV = "prev";
     public const string ACTION_NEXT = "next";
+    public const string ACTION_RANDOM_PLAY = "random-play";
     public const string ACTION_RELOAD = "reload";
-    public const string ACTION_SEARCH = "search";
+    public const string ACTION_REMOVE = "remove";
+    public const string ACTION_SAVE_LIST = "save-list";
+    public const string ACTION_SCHEME = "scheme";
     public const string ACTION_SHOW_FILE = "show-file";
+    public const string ACTION_SHOW_TAGS = "show-tags";
+    public const string ACTION_SHOW_TAGS_CURRENT = "show-cur-tags";
     public const string ACTION_SORT = "sort";
-    public const string ACTION_TOGGLE_SEARCH = "toggle-search";
     public const string ACTION_TOGGLE_SORT = "toggle-sort";
+    public const string ACTION_TRASH_FILE = "trash-file";
     public const string ACTION_QUIT = "quit";
+
+    public const string ACTION_WIN = "win.";
+    public const string ACTION_BUTTON = "button";
+    public const string ACTION_SEARCH = "search";
+    public const string ACTION_SELECT = "select";
+    public const string ACTION_TOGGLE_SEARCH = "toggle-search";
 
     struct ActionShortKey {
         public unowned string name;
@@ -24,197 +37,179 @@ namespace G4 {
 
     public class ActionHandles : Object {
         private Application _app;
+        private Portal _portal = new Portal ();
 
         public ActionHandles (Application app) {
             _app = app;
 
             ActionEntry[] action_entries = {
-                { ACTION_ABOUT, show_about },
-                { ACTION_EXPORT_COVER, export_cover, "aay" },
+                { ACTION_ABOUT, () => show_about_dialog (_app) },
+                { ACTION_ADD_TO_PLAYLIST, add_to_playlist, "s" },
+                { ACTION_ADD_TO_QUEUE, play_or_queue, "s" },
+                { ACTION_EXPORT_COVER, export_cover, "s" },
                 { ACTION_NEXT, () => _app.play_next () },
-                { ACTION_PLAY, play, "aay" },
-                { ACTION_PLAY_AT_NEXT, play_at_next, "aay" },
+                { ACTION_PLAY, play_or_queue, "s" },
+                { ACTION_PLAY_AT_NEXT, play_at_next, "s" },
                 { ACTION_PLAY_PAUSE, () => _app.play_pause () },
                 { ACTION_PREV, () => _app.play_previous () },
                 { ACTION_PREFS, show_preferences },
+                { ACTION_RANDOM_PLAY, play_or_queue, "s" },
                 { ACTION_RELOAD, () => _app.reload_library () },
-                { ACTION_SEARCH, search_by, "aay" },
-                { ACTION_SHOW_FILE, show_file, "aay" },
+                { ACTION_SCHEME, scheme, "s", "'0'" },
+                { ACTION_SHOW_FILE, show_file, "s" },
+                { ACTION_SHOW_TAGS, show_tags, "s" },
+                { ACTION_SHOW_TAGS_CURRENT, show_tags },
                 { ACTION_SORT, sort_by, "s", "'2'" },
-                { ACTION_TOGGLE_SEARCH, toggle_search },
                 { ACTION_TOGGLE_SORT, toggle_sort },
+                { ACTION_TRASH_FILE, trash_file, "s" },
                 { ACTION_QUIT, () => _app.quit () }
             };
             app.add_action_entries (action_entries, this);
 
-            ActionShortKey[] action_keys = {
+            ActionShortKey[] app_keys = {
                 { ACTION_PREFS, "<primary>comma" },
                 { ACTION_PLAY_PAUSE, "<primary>p" },
                 { ACTION_PREV, "<primary>Left" },
                 { ACTION_NEXT, "<primary>Right" },
                 { ACTION_RELOAD, "<primary>r" },
-                { ACTION_TOGGLE_SEARCH, "<primary>f" },
-                { ACTION_TOGGLE_SORT, "<primary>s" },
+                { ACTION_SHOW_TAGS_CURRENT, "<primary>t" },
+                { ACTION_TOGGLE_SORT, "<primary>m" },
                 { ACTION_QUIT, "<primary>q" }
             };
-            foreach (var item in action_keys) {
+            foreach (var item in app_keys) {
                 app.set_accels_for_action (ACTION_APP + item.name, {item.key});
+            }
+
+            ActionShortKey[] win_keys = {
+                { ACTION_SAVE_LIST, "<primary>s" },
+                { ACTION_TOGGLE_SEARCH, "<primary>f" },
+            };
+            foreach (var item in win_keys) {
+                app.set_accels_for_action (ACTION_WIN + item.name, {item.key});
             }
         }
 
-        private async void _export_cover_async (Music? music) {
-            Gst.Sample? sample = _app.current_cover;
-            if (music != null && music != _app.current_music) {
-                var file = File.new_for_uri (music?.uri ?? "");
-                sample = yield run_async<Gst.Sample?> (() => {
+        public Portal portal {
+            get {
+                return _portal;
+            }
+        }
+
+        private async void _export_cover_async (Music music) {
+            var cover = _app.current_cover;
+            if (cover == null || music != _app.current_music) {
+                var file = File.new_for_uri (music.uri);
+                cover = yield run_async<Gst.Sample?> (() => {
                     var tags = parse_gst_tags (file);
                     return tags != null ? parse_image_from_tag_list ((!)tags) : null;
                 });
             }
-            if (music != null && sample != null && _app.active_window is Window) {
-                var itype = sample?.get_caps ()?.get_structure (0)?.get_name ();
+            if (cover != null) {
+                var sample = (!)cover;
+                var itype = sample.get_caps ()?.get_structure (0)?.get_name ();
                 var pos = itype?.index_of_char ('/') ?? -1;
                 var ext = itype?.substring (pos + 1) ?? "";
-                var name = ((!)music).get_artist_and_title ().replace ("/", "&") + "." + ext;
+                var name = music.get_artist_and_title ().replace ("/", "&") + "." + ext;
                 var filter = new Gtk.FileFilter ();
-                filter.add_mime_type (itype ??  "image/*");
-#if GTK_4_10
-                var dialog = new Gtk.FileDialog ();
-                dialog.set_initial_name (name);
-                dialog.set_default_filter (filter);
-                dialog.modal = true;
-                try {
-                    var file = yield dialog.save (_app.active_window, null);
-                    if (file != null) {
-                        yield save_sample_to_file_async ((!)file, (!)sample);
-                    }
-                } catch (Error e) {
+                filter.name = _("Image Files");
+                filter.add_mime_type ("image/*");
+                var initial = File.new_build_filename (name);
+                var file = yield show_save_file_dialog (_app.active_window, initial, {filter});
+                if (file != null) {
+                    var saved = yield save_sample_to_file_async ((!)file, sample);
+                    (_app.active_window as Window)?.show_toast (
+                        saved ? _("Export cover successfully") : _("Export cover failed"), saved ? file?.get_uri () : (string?) null);
                 }
-#else
-                var chooser = new Gtk.FileChooserNative (null, _app.active_window, Gtk.FileChooserAction.SAVE, null, null);
-                chooser.set_current_name (name);
-                chooser.set_filter (filter);
-                chooser.modal = true;
-                chooser.response.connect ((id) => {
-                    var file = chooser.get_file ();
-                    if (id == Gtk.ResponseType.ACCEPT && file is File) {
-                        save_sample_to_file_async.begin ((!)file, (!)sample,
-                            (obj, res) => save_sample_to_file_async.end (res));
-                    }
-                });
-                chooser.show ();
-#endif
             }
         }
 
-        private Music? _get_music_from_parameter (Variant? parameter) {
-            var uri = _parse_uri_form_parameter (parameter);
-            return uri != null ? _app.loader.find_cache ((!)uri) : null;
+        private void add_to_playlist (SimpleAction action, Variant? parameter) {
+            var uri = parameter?.get_string ();
+            var playlist = parse_playlist_from_music_uri (uri);
+            if (playlist != null) {
+                _app.show_add_playlist_dialog.begin ((!)playlist, (obj, res) => _app.show_add_playlist_dialog.end (res));
+            }
         }
 
         private void export_cover (SimpleAction action, Variant? parameter) {
-            var music = _get_music_from_parameter (parameter);
-            _export_cover_async.begin (music, (obj, res) => _export_cover_async.end (res));
+            var uri = parameter?.get_string ();
+            var music = uri != null ? _app.loader.find_cache ((!)uri) : null;
+            if (music != null)
+                _export_cover_async.begin ((!)music, (obj, res) => _export_cover_async.end (res));
         }
 
-        private unowned string? _parse_uri_form_parameter (Variant? parameter) {
-            unowned var strv = parameter?.get_bytestring_array ();
-            if (strv != null && ((!)strv).length > 1) {
-                var arr = (!)strv;
-                return arr[0] == "uri" ? (string?) arr[1] : null;
-            }
-            return null;
-        }
-
-        private Object? _parse_music_node_form_strv (string[]? strv) {
-            if (strv != null && ((!)strv).length > 1) {
-                var arr = (!)strv;
+        private Playlist? parse_playlist_from_music_uri (string? uri) {
+            Music? node = null;
+            if (uri != null) {
+                string? ar = null, al = null, pl = null;
+                parse_library_uri ((!)uri, out ar, out al, out pl);
                 var loader = _app.loader;
                 var library = loader.library;
-                unowned var key = arr[1];
-                switch (arr[0]) {
-                    case PageName.ALBUM:
-                        return library.albums[key];
-                    case PageName.ARTIST:
-                        var artist = library.artists[key];
-                        if ((artist is Artist) && arr.length > 2)
-                            return ((Artist) artist)[arr[2]];
-                        return artist;
-                    case PageName.PLAYLIST:
-                        return library.playlists[key];
-                    default:
-                        return loader.find_cache (key);
+                if (ar != null) {
+                    var artist = library.artists[(!)ar];
+                    if ((artist is Artist) && al != null && ((!)al).length > 0)
+                        node = ((Artist) artist)[(!)al];
+                    else
+                        node = artist;
+                } else if (al != null) {
+                    node = library.albums[(!)al];
+                } else if (pl != null) {
+                    node = library.playlists[(!)pl];
+                } else {
+                    node = loader.find_cache ((!)uri);
                 }
             }
-            return null;
+            return node != null ? to_playlist ({(!)node}) : (Playlist?) null;
         }
 
-        private void play (SimpleAction action, Variant? parameter) {
-            var strv = parameter?.get_bytestring_array ();
-            var obj = _parse_music_node_form_strv (strv);
-            if (obj is Artist) {
-                obj = ((Artist) obj).to_playlist ();
+        private void play_or_queue (SimpleAction action, Variant? parameter) {
+            var uri = parameter?.get_string ();
+            if (action.name.has_suffix (ACTION_ADD_TO_QUEUE)) {
+                var playlist = parse_playlist_from_music_uri (uri);
+                if (playlist != null)
+                    _app.insert_to_queue ((!)playlist, -1, false);
+            } else if (uri != null) {
+                Window.get_default ()?.open_page ((!)uri, true, action.name.has_suffix (ACTION_RANDOM_PLAY));
             }
-            (_app.active_window as Window)?.open_page (strv, obj);
-            _app.play (obj);
         }
 
         private void play_at_next (SimpleAction action, Variant? parameter) {
-            var strv = parameter?.get_bytestring_array ();
-            var obj = _parse_music_node_form_strv (strv);
-            if (obj is Artist) {
-                obj = ((Artist) obj).to_playlist ();
-            }
-            _app.play_at_next (obj);
+            var uri = parameter?.get_string ();
+            var playlist = parse_playlist_from_music_uri (uri);
+            if (playlist != null)
+                _app.insert_after_current ((!)playlist);
         }
 
-        private void search_by (SimpleAction action, Variant? parameter) {
-            var strv = parameter?.get_bytestring_array ();
-            if (strv != null && ((!)strv).length > 1) {
-                var arr = (!)strv;
-                var text = arr[0] + ":";
-                var mode = SearchMode.ANY;
-                parse_search_mode (ref text, ref mode);
-                (_app.active_window as Window)?.start_search (arr[1], mode);
-            }
-        }
-
-        private void show_about () {
-            string[] authors = { "Nanling" };
-            var comments = _("A fast, fluent, light weight music player written in GTK4.");
-            /* Translators: Replace "translator-credits" with your names, one name per line */
-            var translator_credits = _("translator-credits");
-            var website = "https://gitlab.gnome.org/neithern/g4music";
-#if ADW_1_2
-            var win = new Adw.AboutWindow ();
-            win.application_icon = _app.application_id;
-            win.application_name = _app.name;
-            win.version = Config.VERSION;
-            win.comments = comments;
-            win.license_type = Gtk.License.GPL_3_0;
-            win.developers = authors;
-            win.website = website;
-            win.issue_url = "https://gitlab.gnome.org/neithern/g4music/issues";
-            win.translator_credits = translator_credits;
-            win.transient_for = _app.active_window;
-            win.present ();
-#else
-            Gtk.show_about_dialog (_app.active_window,
-                                   "logo-icon-name", _app.application_id,
-                                   "program-name", _app.name,
-                                   "version", Config.VERSION,
-                                   "comments", comments,
-                                   "authors", authors,
-                                   "translator-credits", translator_credits,
-                                   "license-type", Gtk.License.GPL_3_0,
-                                   "website", website
-                                  );
-#endif
+        private void scheme (SimpleAction action, Variant? state) {
+            uint scheme = 0;
+            if (uint.try_parse (state?.get_string () ?? "", out scheme))
+                _app.settings.set_uint ("color-scheme", scheme);
         }
 
         private void show_file (SimpleAction action, Variant? parameter) {
-            var uri = _parse_uri_form_parameter (parameter);
-            _app.show_uri_with_portal (uri);
+            var uri = parameter?.get_string ();
+            if (uri != null) {
+                if (((!)uri).has_prefix (LIBRARY_SCHEME)) {
+                    Window.get_default ()?.open_page ((!)uri, false);
+                } else {
+                    _portal.open_directory_async.begin ((!)uri, (obj, res) => {
+                        try {
+                            _portal.open_directory_async.end (res);
+                        } catch (Error e) {
+                            Window.get_default ()?.show_toast (e.message);
+                        }
+                    });
+                }
+            }
+        }
+
+        private void show_tags (SimpleAction action, Variant? parameter) {
+            var uri = parameter?.get_string () ?? _app.current_music?.uri;
+            if (uri != null) {
+                var tags = strcmp (_app.current_music?.uri, uri) == 0 ? _app.player.tag_list : (Gst.TagList?) null;
+                var dialog = new TagListDialog ((!)uri, tags);
+                dialog.present (Window.get_default ());
+            }
         }
 
         private PreferencesWindow? _pref_window = null;
@@ -234,12 +229,8 @@ namespace G4 {
         private void sort_by (SimpleAction action, Variant? state) {
             unowned var value = state?.get_string () ?? "";
             int mode = 2;
-            int.try_parse (value, out mode, null, 10);
-            _app.sort_mode = mode;
-        }
-
-        public void toggle_search () {
-            (_app.active_window as Window)?.toggle_search ();
+            if (int.try_parse (value, out mode))
+                _app.sort_mode = mode;
         }
 
         private void toggle_sort () {
@@ -247,6 +238,21 @@ namespace G4 {
                 _app.sort_mode = SortMode.ALBUM;
             else
                 _app.sort_mode = _app.sort_mode + 1;
+        }
+
+        private void trash_file (SimpleAction action, Variant? parameter) {
+            var uri = parameter?.get_string ();
+            if (uri != null) {
+                _portal.trash_file_async.begin ((!)uri, (obj, res) => {
+                    try {
+                        if (_portal.trash_file_async.end (res)) {
+                            _app.loader.on_file_removed (File.new_for_uri ((!)uri));
+                        }
+                    } catch (Error e) {
+                        Window.get_default ()?.show_toast (e.message);
+                    }
+                });
+            }
         }
     }
 }

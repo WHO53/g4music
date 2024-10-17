@@ -16,18 +16,16 @@ namespace G4 {
 
         public static void get_audio_sinks (GenericArray<Gst.ElementFactory> sinks) {
             var caps = new Gst.Caps.simple ("audio/x-raw", "format", Type.STRING, "S16LE", null);
-            var list = Gst.ElementFactory.list_get_elements (Gst.ElementFactoryType.AUDIOVIDEO_SINKS, Gst.Rank.NONE);
+            var list = Gst.ElementFactory.list_get_elements (Gst.ElementFactoryType.AUDIOVIDEO_SINKS, Gst.Rank.SECONDARY);
             list = Gst.ElementFactory.list_filter (list, caps, Gst.PadDirection.SINK, false);
-            list.foreach ((factory) => {
-                if (factory.get_rank () >= Gst.Rank.MARGINAL || factory.name == "pipewiresink")
-                    sinks.add (factory);
-            });
+            list.foreach ((factory) => sinks.add (factory));
         }
 
         private dynamic Gst.Pipeline? _pipeline = null;
         private dynamic Gst.Element? _audio_sink = null;
         private dynamic Gst.Element? _replay_gain = null;
         private string _audio_sink_name = "";
+        private int _audio_sink_requested = 0;
         private string? _current_uri = null;
         private Gst.ClockTime _duration = Gst.CLOCK_TIME_NONE;
         private Gst.ClockTime _position = Gst.CLOCK_TIME_NONE;
@@ -38,6 +36,8 @@ namespace G4 {
         private Gst.State _state = Gst.State.NULL;
         private bool _seeking = false;
         private Gst.TagList? _tag_list = null;
+        private uint _tag_handle = 0;
+        private bool _tag_parsed = false;
         private uint _timer_handle = 0;
         private unowned Thread<void> _main_thread = Thread<void>.self ();
 
@@ -55,10 +55,10 @@ namespace G4 {
             Gst.version (out major, out minor, out micro, out nano);
             if (major > 1 || (major == 1 && minor >= 24)) {
                 _pipeline = Gst.ElementFactory.make ("playbin3", "player") as Gst.Pipeline;
-                if (_pipeline != null) {
+                if (_pipeline != null)
                     print (@"Use playbin3\n");
             }
-            } if (_pipeline == null) {
+            if (_pipeline == null) {
                 _pipeline = Gst.ElementFactory.make ("playbin", "player") as Gst.Pipeline;
             }
             if (_pipeline != null) {
@@ -73,6 +73,10 @@ namespace G4 {
         }
 
         ~GstPlayer () {
+            if (_tag_handle != 0)
+                Source.remove (_tag_handle);
+            if (_timer_handle != 0)
+                Source.remove (_timer_handle);
             _peak_calculator.clear ();
             _pipeline?.set_state (Gst.State.NULL);
         }
@@ -118,12 +122,11 @@ namespace G4 {
                 return _current_uri;
             }
             set {
-                if (_pipeline != null) lock (_pipeline) {
-                    _current_uri = value;
-                    _duration = Gst.CLOCK_TIME_NONE;
-                    _position = Gst.CLOCK_TIME_NONE;
-                    _tag_list = null;
+                _current_uri = value;
+                if (_pipeline != null) {
                     ((!)_pipeline).uri = value;
+                    if (AtomicInt.compare_and_exchange (ref _audio_sink_requested, 1, 0))
+                        update_audio_sink ();
                 }
             }
         }
@@ -134,21 +137,21 @@ namespace G4 {
             }
             set {
                 var sink_name = value;
-                if (sink_name.length == 0) {
-                    var sinks = new GenericArray<Gst.ElementFactory> (8);
-                    get_audio_sinks (sinks);
-                    if (sinks.length > 0)
-                        sink_name = sinks[0].name;
+                if (sink_name.length == 0 || (Gst.ElementFactory.find (sink_name)?.get_rank () ?? Gst.Rank.NONE) <= Gst.Rank.MARGINAL) {
+                    var list = Gst.ElementFactory.list_get_elements (Gst.ElementFactoryType.AUDIOVIDEO_SINKS, Gst.Rank.PRIMARY);
+                    if (!list.is_empty ())
+                        sink_name = list.first ().data.name;
                 }
-                var sink = Gst.ElementFactory.make (sink_name, "audiosink");
+                var sink = Gst.ElementFactory.make (sink_name, sink_name);
                 if (sink != null) {
                     _audio_sink = sink;
                     _audio_sink_name = value;
                     ((!)_audio_sink).enable_last_sample = true;
                 }
-                if (_pipeline != null)
+                if (_pipeline != null && _current_uri != null)
                     update_audio_sink ();
-                print (@"Audio sink$(sink != null ? ":" : "!=") $(sink_name)\n");
+                else
+                    AtomicInt.set (ref _audio_sink_requested, 1);
             }
         }
 
@@ -186,9 +189,16 @@ namespace G4 {
                 _replay_gain = value != 0 ? Gst.ElementFactory.make ("rgvolume", "gain") : null;
                 if (_replay_gain != null)
                     ((!)_replay_gain).album_mode = value == 2;
-                if (_pipeline != null)
+                    if (_pipeline != null && _current_uri != null)
                     update_audio_sink ();
-                print (@"Enable ReplayGain: $(value != 0 && _replay_gain != null)\n");
+                else
+                    AtomicInt.set (ref _audio_sink_requested, 1);
+            }
+        }
+
+        public Gst.TagList? tag_list {
+            get {
+                return _tag_list;
             }
         }
 
@@ -207,6 +217,16 @@ namespace G4 {
                 //  print ("Seek: %g -> %g\n", to_second (_position), to_second (position));
                 _seeking = ((!)_pipeline).seek_simple (Gst.Format.TIME, Gst.SeekFlags.ACCURATE | Gst.SeekFlags.FLUSH, (int64) position);
             }
+        }
+
+        private void emit_tag_parsed (uint delay = 0) {
+            if (_tag_handle != 0)
+                Source.remove (_tag_handle);
+            _tag_handle = run_timeout_once (delay, () => {
+                _tag_handle = 0;
+                _tag_parsed = true;
+                tag_parsed (_current_uri, _tag_list);
+            });
         }
 
         private bool bus_callback (Gst.Bus bus, Gst.Message message) {
@@ -257,15 +277,18 @@ namespace G4 {
 
                 case Gst.MessageType.STREAM_START:
                     on_stream_start ();
+                    if (!_tag_parsed) {
+                        emit_tag_parsed (50);
+                    }
                     break;
 
                 case Gst.MessageType.TAG:
                     Gst.TagList? tags = null;
                     message.parse_tag (out tags);
-                    if (_tag_list != null)
-                        _tag_list?.merge (tags, Gst.TagMergeMode.REPLACE);
-                    else
-                        _tag_list = tags;
+                    _tag_list = merge_tags (_tag_list, tags);
+                    if (!_tag_parsed) {
+                        emit_tag_parsed (tags_has_image (_tag_list) ? 0 : 50);
+                    }
                     break;
 
                 default:
@@ -274,10 +297,6 @@ namespace G4 {
         }
 
         private void on_state_changed (Gst.State old, Gst.State state) {
-            if (old == Gst.State.READY && state == Gst.State.PAUSED) {
-                parse_duration ();
-                tag_parsed (_current_uri, _tag_list);
-            }
             if (old != state && _state != state) {
                 _state = state;
                 state_changed (state);
@@ -292,13 +311,14 @@ namespace G4 {
         }
 
         private void on_stream_start () {
+            _peak_calculator.clear ();
+            _tag_list = null;
+            _tag_parsed = false;
             if (AtomicInt.compare_and_exchange (ref _next_uri_requested, 1, 0)) {
-                _peak_calculator.clear ();
                 next_uri_start ();
-                parse_duration ();
-                parse_position ();
-                tag_parsed (_current_uri, _tag_list);
             }
+            parse_duration ();
+            parse_position ();
         }
 
         private void on_stream_to_finish () {
@@ -312,14 +332,43 @@ namespace G4 {
         private void parse_duration () {
             if (((!)_pipeline).query_duration (Gst.Format.TIME, out _duration)) {
                 duration_changed (_duration);
+            } else {
+                _duration = Gst.CLOCK_TIME_NONE;
             }
         }
 
         private bool parse_position () {
             if (((!)_pipeline).query_position (Gst.Format.TIME, out _position)) {
                 position_updated (_position);
+            } else {
+                _position = Gst.CLOCK_TIME_NONE;
             }
             return true;
+        }
+
+        private Gst.Element? setup_audio_sink () {
+            dynamic Gst.Bin? sink_bin = Gst.ElementFactory.make ("bin", "audio-sink-bin") as Gst.Bin;
+
+            if (_replay_gain != null) {
+                (_replay_gain?.parent as Gst.Bin)?.remove_element ((!)_replay_gain);
+                sink_bin?.add ((!)_replay_gain);
+            }
+            print (@"Enable ReplayGain: $(_replay_gain != null)\n");
+
+            if (_audio_sink != null) {
+                (_audio_sink?.parent as Gst.Bin)?.remove_element ((!)_audio_sink);
+                sink_bin?.add ((!)_audio_sink);
+                _replay_gain?.link ((!)_audio_sink);
+            }
+            print ("Audio Sink: %s\n", _audio_sink?.name ?? "");
+
+            Gst.Pad? static_pad = (_replay_gain ?? _audio_sink)?.get_static_pad ("sink");
+            if (static_pad != null) {
+                sink_bin?.add_pad (new Gst.GhostPad ("sink", (!)static_pad));
+            } else {
+                (_audio_sink?.parent as Gst.Bin)?.remove_element ((!)_audio_sink);
+            }
+            return static_pad != null ? sink_bin : _audio_sink;
         }
 
         private void update_audio_sink () {
@@ -327,30 +376,7 @@ namespace G4 {
             var saved_pos = _position;
             var saved_state = _state;
             pipeline.set_state (Gst.State.NULL);
-
-            if (_audio_sink != null) {
-                var bin = _audio_sink?.parent as Gst.Bin;
-                bin?.remove_element ((!)_audio_sink);
-            }
-            if (_replay_gain != null) {
-                var bin = _replay_gain?.parent as Gst.Bin;
-                bin?.remove_element ((!)_replay_gain);
-            }
-
-            dynamic Gst.Bin? bin = null;
-            if (_audio_sink != null && _replay_gain != null
-                    && (bin = Gst.ElementFactory.make ("bin", null) as Gst.Bin) != null) {
-                bin?.add_many ((!)_replay_gain, (!)_audio_sink);
-                _replay_gain?.link ((!)_audio_sink);
-                Gst.Pad? static_pad = _replay_gain?.get_static_pad ("sink");
-                if (static_pad != null) {
-                    bin?.add_pad (new Gst.GhostPad ("sink", (!)static_pad));
-                } else {
-                    bin = null;
-                }
-            }
-
-            pipeline.audio_sink = bin != null ? bin : _audio_sink;
+            pipeline.audio_sink = setup_audio_sink ();
             if (saved_state != Gst.State.NULL) {
                 pipeline.set_state (saved_state);
             }
@@ -361,7 +387,7 @@ namespace G4 {
                         return false;
                     }
                     return _state != Gst.State.NULL;
-                });
+                }, Priority.LOW);
             }
         }
     }

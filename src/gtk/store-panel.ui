@@ -30,9 +30,22 @@
           </object>
         </child>
         <child type="start">
-          <object class="GtkMenuButton" id="sort_btn">
-            <property name="menu_model">sort_menu</property>
-            <property name="tooltip-text" translatable="yes">Sort By</property>
+          <object class="GtkBox">
+            <property name="orientation">horizontal</property>
+            <property name="width-request">52</property>
+            <child>
+              <object class="GtkMenuButton" id="sort_btn">
+                <property name="menu_model">sort_menu</property>
+                <property name="tooltip-text" translatable="yes">Sort By</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="indicator">
+                <property name="label">•</property>
+                <property name="margin-start">4</property>
+                <property name="visible">false</property>
+              </object>
+            </child>
           </object>
         </child>
       </object>
@@ -48,16 +61,41 @@
     </child>
     <child>
       <object class="GtkStack" id="stack_view">
-        <property name="width_request">340</property>
       </object>
     </child>
   </template>
 
   <menu id="primary_menu">
+    <submenu>
+      <attribute name="label" translatable="yes">_Color Scheme</attribute>
+      <item>
+        <attribute name="label" translatable="yes">_System</attribute>
+        <attribute name="action">app.scheme</attribute>
+        <attribute name="target">0</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Light</attribute>
+        <attribute name="action">app.scheme</attribute>
+        <attribute name="target">1</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Dark</attribute>
+        <attribute name="action">app.scheme</attribute>
+        <attribute name="target">4</attribute>
+      </item>
+    </submenu>
     <section>
       <item>
         <attribute name="label" translatable="yes">_Reload Library</attribute>
         <attribute name="action">app.reload</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Multiple Select</attribute>
+        <attribute name="action">win.select</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Save List</attribute>
+        <attribute name="action">win.save-list</attribute>
       </item>
     </section>
     <section>

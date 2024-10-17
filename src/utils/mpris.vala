@@ -29,7 +29,7 @@ namespace G4 {
 
         public bool can_go_next {
             get {
-                return _app.current_item < (int) _app.music_list.get_n_items () - 1;
+                return _app.current_item < (int) _app.current_list.get_n_items () - 1;
             }
         }
 
@@ -46,6 +46,12 @@ namespace G4 {
         }
 
         public bool can_pause {
+            get {
+                return _app.current_music != null;
+            }
+        }
+
+        public bool can_seek {
             get {
                 return _app.current_music != null;
             }
@@ -100,6 +106,10 @@ namespace G4 {
 
         public void pause () throws Error {
             _app.player.pause ();
+        }
+
+        public void seek (int64 offset) throws Error {
+            _app.player.position += offset * Gst.USECOND;
         }
 
         private void on_duration_changed (Gst.ClockTime duration) {

@@ -15,6 +15,7 @@ namespace G4 {
         private int _label_width = 0;
 
         construct {
+            _label.xalign = 0;
             _label.set_parent (this);
         }
 

@@ -9,25 +9,13 @@
           <object class="AdwPreferencesGroup">
             <property name="title" translatable="yes">General</property>
             <child>
-              <object class="AdwActionRow" id="dark_theme">
-                <property name="icon-name">night-light-symbolic</property>
-                <property name="title" translatable="yes">Prefer dark theme</property>
-                <property name="activatable_widget">dark_btn</property>
-                <child>
-                  <object class="GtkSwitch" id="dark_btn">
-                    <property name="valign">center</property>
-                  </object>
-                </child>
-              </object>
-            </child>
-            <child>
               <object class="AdwComboRow" id="blur_row">
                 <property name="icon-name">view-dual-symbolic</property>
                 <property name="title" translatable="yes">Background blur mode</property>
               </object>
             </child>
             <child>
-              <object class="AdwActionRow" id="compact_list">
+              <object class="AdwActionRow">
                 <property name="icon-name">view-list-symbolic</property>
                 <property name="title" translatable="yes">Compact playlist view</property>
                 <property name="activatable_widget">compact_btn</property>
@@ -39,12 +27,24 @@
               </object>
             </child>
             <child>
-              <object class="AdwActionRow" id="grid_mode">
+              <object class="AdwActionRow">
                 <property name="icon-name">view-grid-symbolic</property>
                 <property name="title" translatable="yes">Grid view for artists/albums</property>
                 <property name="activatable_widget">grid_btn</property>
                 <child>
                   <object class="GtkSwitch" id="grid_btn">
+                    <property name="valign">center</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+             <child>
+              <object class="AdwActionRow">
+                <property name="icon-name">input-mouse-symbolic</property>
+                <property name="title" translatable="yes">Single click to activate item</property>
+                <property name="activatable_widget">single_btn</property>
+                <child>
+                  <object class="GtkSwitch" id="single_btn">
                     <property name="valign">center</property>
                   </object>
                 </child>
@@ -115,7 +115,7 @@
                 <property name="title" translatable="yes">Show audio peak level</property>
               	<property name="show-enable-switch">true</property>
                 <child>
-                  <object class="AdwActionRow" id="peak_act_row">
+                  <object class="AdwActionRow">
                     <property name="title" translatable="yes">Display characters</property>
                     <child>
                       <object class="GtkEntry" id="peak_entry">
@@ -129,7 +129,7 @@
               </object>
             </child>
             <child>
-              <object class="AdwActionRow" id="rotate_cover">
+              <object class="AdwActionRow">
                 <property name="icon-name">object-rotate-right-symbolic</property>
                 <property name="title" translatable="yes">Rotate album cover</property>
                 <property name="activatable_widget">rotate_btn</property>

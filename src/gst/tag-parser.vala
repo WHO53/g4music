@@ -60,7 +60,7 @@ namespace G4 {
             }
         }
 
-        if (tags_has_title_or_image (tags)) {
+        if (tags_has_text (tags) || tags_has_image (tags)) {
             return tags;
         }
 
@@ -90,13 +90,20 @@ namespace G4 {
         return tags;
     }
 
-    public static bool tags_has_title_or_image (Gst.TagList? tags) {
+    public static bool tags_has_image (Gst.TagList? tags) {
+        if (tags == null)
+            return false;
+        var t = (!)tags;
+        return t.get_tag_size (Gst.Tags.IMAGE) > 0
+            || t.get_tag_size (Gst.Tags.PREVIEW_IMAGE) > 0;
+    }
+
+    public static bool tags_has_text (Gst.TagList? tags) {
         if (tags == null)
             return false;
         var t = (!)tags;
         return t.get_tag_size (Gst.Tags.ARTIST) > 0
-            || t.get_tag_size (Gst.Tags.TITLE) > 0
-            || t.get_tag_size (Gst.Tags.IMAGE) > 0;
+            || t.get_tag_size (Gst.Tags.TITLE) > 0;
     }
 
     public inline uint8[] new_uint8_array (uint size) throws Error {
@@ -294,6 +301,17 @@ namespace G4 {
         return tags;
     }
 
+    private static void parse_mp4_date_value (uint8[] data, string tag, Gst.TagList tags) throws Error {
+        var str = parse_mp4_string (data);
+        if (str != null) {
+            var date = new Gst.DateTime.from_iso8601_string ((!)str);
+            tags.add (Gst.TagMergeMode.REPLACE, tag, date);
+            //  print (@"Tag: $tag=$(date.get_year ())\n");
+        } else {
+            print ("MP4: unknown date type: %s\n", str ?? "");
+        }
+    }
+
     private static void parse_mp4_image_value (uint8[] data, string tag, Gst.TagList tags) throws Error {
         var len = data.length;
         if (len > 16) {
@@ -344,18 +362,24 @@ namespace G4 {
         (string) null
     };
 
-    private static void parse_mp4_string_value (uint8[] data, string tag, Gst.TagList tags) throws Error {
+    private static string? parse_mp4_string (uint8[] data) throws Error {
         var len = data.length;
         if (len > 16) {
             var type = read_uint32_be (data, 8);
             if (type == 0x00000001) {
                 var str_data = data[16:len];
-                var value = Gst.Tag.freeform_string_to_utf8 ((char[]) str_data, MP4_TAG_ENCODINGS);
-                if (value != (string)null && value.length > 0) {
-                    tags.add (Gst.TagMergeMode.REPLACE, (!)tag, value);
-                    //  print (@"Tag: $tag=$value\n");
-                }
+                return (string?) Gst.Tag.freeform_string_to_utf8 ((char[]) str_data, MP4_TAG_ENCODINGS);
             }
+        }
+        return null;
+    }
+
+    private static void parse_mp4_string_value (uint8[] data, string tag, Gst.TagList tags) throws Error {
+        var str = parse_mp4_string (data);
+        if (str != null && ((!)str).length > 0) {
+            var value = (!)str;
+            tags.add (Gst.TagMergeMode.REPLACE, tag, value);
+            //  print (@"Tag: $tag=$value\n");
         } else {
             print ("MP4: unknown string type\n");
         }
@@ -394,14 +418,33 @@ namespace G4 {
                         parse_mp4_string_value (data, Gst.Tags.ARTIST, tags);
                         break;
                     case 0xa9616c62u: // _alb
-                    case 0x616c626du: // alum
+                    case 0x616c626du: // albm
                         parse_mp4_string_value (data, Gst.Tags.ALBUM, tags);
                         break;
-                    case 0x74726b6eu: // trkn
-                        parse_mp4_number_value (data, Gst.Tags.TRACK_NUMBER, Gst.Tags.TRACK_COUNT, tags);
+                    case 0xa9777274u: // _wrt
+                    case 0x61757468u: // auth
+                        parse_mp4_string_value (data, Gst.Tags.COMPOSER, tags);
+                        break;
+                    case 0xa9636d74u: // _cmt
+                    case 0xa9696e66u: // _inf
+                        parse_mp4_string_value (data, Gst.Tags.COMMENT, tags);
+                        break;
+                    case 0xa96c7972u: // _lyr
+                        parse_mp4_string_value (data, Gst.Tags.LYRICS, tags);
+                        break;
+                    case 0xa9646179u: // _day
+                    case 0x79727263u: // yrrc
+                        parse_mp4_date_value (data, Gst.Tags.DATE_TIME, tags);
                         break;
                     case 0x636f7672u: // covr
                         parse_mp4_image_value (data, Gst.Tags.IMAGE, tags);
+                        break;
+                    case 0x64697363u: // disc
+                    case 0x6469736bu: // disk
+                        parse_mp4_number_value (data, Gst.Tags.ALBUM_VOLUME_NUMBER, Gst.Tags.ALBUM_VOLUME_COUNT, tags);
+                        break;
+                    case 0x74726b6eu: // trkn
+                        parse_mp4_number_value (data, Gst.Tags.TRACK_NUMBER, Gst.Tags.TRACK_COUNT, tags);
                         break;
                     default:
                         break;
@@ -528,7 +571,7 @@ namespace G4 {
                     } else {
                         msg.parse_tag (out tags);
                     }
-                    if (tags_has_title_or_image (tags)) {
+                    if (tags_has_text (tags) || tags_has_image (tags)) {
                         quit = true;
                     }
                     break;
@@ -571,6 +614,28 @@ namespace G4 {
             return "asfparse";
         }
         return null;
+    }
+
+    public static void get_one_tag (Gst.TagList tags, string tag, GenericArray<string> values) {
+        var size = tags.get_tag_size (tag);
+        for (var i = 0; i < size; i++) {
+            var val = tags.get_value_index (tag, i);
+            if (val != null) {
+                var value = (!)val;
+                if (value.holds (typeof (string))) {
+                    values.add (value.get_string ());
+                } else if (value.holds (typeof (uint))) {
+                    values.add (value.get_uint ().to_string ());
+                } else if (value.holds (typeof (double))) {
+                    values.add (value.get_double ().to_string ());
+                } else if (value.holds (typeof (bool))) {
+                    values.add (value.get_boolean ().to_string ());
+                } else if (value.holds (typeof (Gst.DateTime))) {
+                    var date = (Gst.DateTime) value.get_boxed ();
+                    values.add (date.to_iso8601_string () ?? "");
+                }
+            }
+        }
     }
 
     public static Gst.Sample? parse_image_from_tag_list (Gst.TagList tags) {

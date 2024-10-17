@@ -113,17 +113,10 @@ namespace G4 {
         }
 
         public override void snapshot (Gtk.Snapshot snapshot) {
-            base.snapshot (snapshot);
-
-            var color = Gdk.RGBA ();
-            color.alpha = 0.2f;
-            color.red = color.green = color.blue = 0;
             var rect = Graphene.Rect ();
             rect.init (0, 0, get_width (), get_height ());
-            rect.inset (6, 6);
-            var outline = Gsk.RoundedRect ();
-            outline.init_from_rect (rect, 6);
-            snapshot.append_outset_shadow (outline, color, 1, 1, 1, 5);
+            draw_outset_shadow (snapshot, rect);
+            base.snapshot (snapshot);
         }
 
         private void on_duration_changed (Gst.ClockTime duration) {

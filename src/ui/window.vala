@@ -1,6 +1,7 @@
 namespace G4 {
 
     public class Window : Adw.ApplicationWindow {
+        private Adw.ToastOverlay _toast = new Adw.ToastOverlay ();
         private Leaflet _leaflet = new Leaflet ();
         private Gtk.ProgressBar _progress_bar = new Gtk.ProgressBar ();
         private PlayPanel _play_panel;
@@ -15,19 +16,31 @@ namespace G4 {
             this.application = app;
             this.icon_name = app.application_id;
             this.title = app.name;
+            this.width_request = ContentWidth.MIN;
             this.close_request.connect (on_close_request);
 
             var overlay = new Gtk.Overlay ();
             this.content = overlay;
+            overlay.child = _toast;
+            _toast.child = _leaflet;
+
+            ActionEntry[] action_entries = {
+                { ACTION_BUTTON, button_command, "s" },
+                { ACTION_REMOVE, remove_from_list, "s" },
+                { ACTION_SAVE_LIST, save_list },
+                { ACTION_SEARCH, search_by, "as" },
+                { ACTION_SELECT, start_select },
+                { ACTION_TOGGLE_SEARCH, toggle_search },
+            };
+            add_action_entries (action_entries, this);
 
             _progress_bar.hexpand = true;
-            _progress_bar.margin_top = 46;  // at the bottom of the header_bar
             _progress_bar.pulse_step = 0.02;
             _progress_bar.sensitive = false;
             _progress_bar.visible = false;
             _progress_bar.add_css_class ("osd");
-            overlay.child = _leaflet;
             overlay.add_overlay (_progress_bar);
+            overlay.get_child_position.connect (on_overlay_child_position);
             app.loader.loading_changed.connect (on_loading_changed);
 
             _bkgnd_paintable.queue_draw.connect (this.queue_draw);
@@ -87,19 +100,30 @@ namespace G4 {
             base.snapshot (snapshot);
         }
 
-        public void open_page (string[] paths, Object? obj = null) {
-            _store_panel.locate_to_path (paths, obj);
-        }
-
-        public void start_search (string text, uint mode = SearchMode.ANY) {
-            _store_panel.start_search (text, mode);
+        public void open_page (string uri, bool play_now = false, bool shuffle = false) {
+            _store_panel.open_page (uri, play_now, shuffle);
             if (_leaflet.folded) {
                 _leaflet.pop ();
             }
         }
 
-        public void toggle_search () {
-            if (_store_panel.toggle_search () && _leaflet.folded) {
+        public int open_next_playable_page () {
+            return _store_panel.open_next_playable_page ();
+        }
+
+        public void show_toast (string message, string? uri = null) {
+            var toast = new Adw.Toast (message);
+            if (uri != null) {
+                toast.action_name = ACTION_APP + ACTION_SHOW_FILE;
+                toast.action_target = new Variant.string ((!)uri);
+                toast.button_label = _("Show");
+            }
+            _toast.add_toast (toast);
+        }
+
+        public void start_search (string text, uint mode = SearchMode.ANY) {
+            _store_panel.start_search (text, mode);
+            if (_leaflet.folded) {
                 _leaflet.pop ();
             }
         }
@@ -120,6 +144,10 @@ namespace G4 {
                 this.visible = false;
                 return true;
             }
+            if (_store_panel.save_if_modified (true, close)) {
+                present ();
+                return true;
+            }
             return false;
         }
 
@@ -134,7 +162,7 @@ namespace G4 {
 
             var app = (Application) application;
             var mini_cover = music != null ? (app.thumbnailer.find ((!)music) ?? _cover_paintable) : app.icon;
-            _store_panel.set_mini_cover_and_title (mini_cover, music?.title ?? "");
+            _store_panel.set_mini_cover (mini_cover);
             update_background ();
 
             var target = new Adw.CallbackAnimationTarget ((value) => {
@@ -152,30 +180,9 @@ namespace G4 {
         }
 
         private bool on_file_dropped (Value value, double x, double y) {
-            File[] files = {};
-            var type = value.type ();
-            if (type == Type.STRING) {
-                var text = value.get_string ();
-                var list = text.split_set ("\n");
-                files = new File[list.length];
-                var index = 0;
-                foreach (var path in list) {
-                    files[index++] = File.new_for_path (path);
-                }
-            } else if (type == typeof (Gdk.FileList)) {
-                var list = ((Gdk.FileList) value).get_files ();
-                files = new File[list.length ()];
-                var index = 0;
-                foreach (var file in list) {
-                    files[index++] = file;
-                }
-            } else {
-                print ("Uknown type: %s\n", value.type_name ());
-                return false;
-            }
-
+            var files = get_dropped_files (value);
             var app = (Application) application;
-            app.open_files_async.begin (files, app.current_music == null,
+            app.open_files_async.begin (files, -1, app.current_music == null,
                 (obj, res) => app.open_files_async.end (res));
             return true;
         }
@@ -211,14 +218,25 @@ namespace G4 {
             return true;
         }
 
+        private bool on_overlay_child_position (Gtk.Widget widget, out Gdk.Rectangle rect) {
+            rect = Gdk.Rectangle ();
+            rect.x = rect.y = rect.width = rect.height = 0;
+            if (widget == _progress_bar) {
+                rect.y = _store_panel.header_bar.get_height ();
+                rect.width = _store_panel.get_width ();
+            }
+            return true;
+        }
+
         private void setup_drop_target () {
             //  Hack: when drag a folder from nautilus,
             //  the value is claimed as GdkFileList in accept(),
             //  but the value can't be convert as GdkFileList in drop(),
             //  so use STRING type to get the file/folder path.
-            var target = new Gtk.DropTarget (Type.INVALID, Gdk.DragAction.COPY);
+            var target = new Gtk.DropTarget (Type.INVALID, Gdk.DragAction.COPY | Gdk.DragAction.LINK);
             target.set_gtypes ({ Type.STRING, typeof (Gdk.FileList) });
-            target.accept.connect ((drop) => drop.formats.contain_gtype (typeof (Gdk.FileList)));
+            target.accept.connect ((drop) => drop.formats.contain_gtype (typeof (Gdk.FileList))
+                                && !drop.formats.contain_gtype (typeof (Playlist)));
 #if GTK_4_10
             target.drop.connect (on_file_dropped);
 #else
@@ -235,6 +253,50 @@ namespace G4 {
             this.bind_property ("focus_widget", this, "focused_widget");
         }
 
+        private void button_command (SimpleAction action, Variant? parameter) {
+            var name = parameter?.get_string ();
+            if (name != null) {
+                _store_panel.current_list.button_command ((!)name);
+            }
+        }
+
+        private void remove_from_list (SimpleAction action, Variant? parameter) {
+            var app = (Application) application;
+            var uri = parameter?.get_string ();
+            var music = uri != null ? app.loader.find_cache ((!)uri) : null;
+            if (music != null) {
+                _store_panel.remove_from_list ((!)music);
+            }
+        }
+
+        private void save_list () {
+            _store_panel.save_if_modified (false);
+        }
+
+        private void search_by (SimpleAction action, Variant? parameter) {
+            var strv = parameter?.get_strv ();
+            if (strv != null && ((!)strv).length > 1) {
+                var arr = (!)strv;
+                var text = arr[0] + ":";
+                var mode = SearchMode.ANY;
+                parse_search_mode (ref text, ref mode);
+                start_search (arr[1], mode);
+            }
+        }
+
+        private void start_select () {
+            _store_panel.current_list.multi_selection = true;
+            if (_leaflet.folded) {
+                _leaflet.pop ();
+            }
+        }
+
+        private void toggle_search () {
+            if (_store_panel.toggle_search () && _leaflet.folded) {
+                _leaflet.pop ();
+            }
+        }
+
         private void update_background () {
             var paintable = _cover_paintable;
             if ((_bkgnd_blur == BlurMode.ALWAYS && paintable != null)
@@ -244,6 +306,16 @@ namespace G4 {
             } else {
                 _bkgnd_paintable.paintable = null;
             }
+        }
+
+        public static Window? get_default () {
+            unowned var list = (GLib.Application.get_default () as Application)?.get_windows ();
+            for (; list != null; list = list?.next) {
+                var window = ((!)list).data;
+                if (window is Window)
+                    return (Window) window;
+            }
+            return null;
         }
     }
 
@@ -262,5 +334,27 @@ namespace G4 {
             }
         }
         return null;
+    }
+
+    public File[] get_dropped_files (Value value) {
+        File[] files = {};
+        var type = value.type ();
+        if (type == Type.STRING) {
+            var text = value.get_string ();
+            var list = text.split_set ("\n");
+            files = new File[list.length];
+            var index = 0;
+            foreach (var path in list) {
+                files[index++] = File.new_for_path (path);
+            }
+        } else if (type == typeof (Gdk.FileList)) {
+            var list = ((Gdk.FileList) value).get_files ();
+            files = new File[list.length ()];
+            var index = 0;
+            foreach (var file in list) {
+                files[index++] = file;
+            }
+        }
+        return files;
     }
 }

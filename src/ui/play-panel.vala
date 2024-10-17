@@ -47,12 +47,16 @@ namespace G4 {
 
             back_btn.clicked.connect (leaflet.pop);
 
-            initial_label.activate_link.connect (on_music_folder_clicked);
-
             _matrix_paintable.paintable = _round_paintable;
             _crossfade_paintable.paintable = _matrix_paintable;
             _crossfade_paintable.queue_draw.connect (music_cover.queue_draw);
             music_cover.paintable = _crossfade_paintable;
+            create_drag_source ();
+
+            make_widget_clickable (index_label).released.connect (
+                () => (root as Window)?.open_page (_app.settings.get_string ("library-uri")));
+
+            initial_label.activate_link.connect (on_music_folder_clicked);
 
             music_album.tooltip_text = _("Search Album");
             music_artist.tooltip_text = _("Search Artist");
@@ -100,9 +104,7 @@ namespace G4 {
         public void first_allocated () {
             // Delay update info after the window size allocated to avoid showing slowly
             _size_allocated = true;
-            if (_app.current_music != _current_music || _current_music == null) {
-                on_music_changed (_app.current_music);
-            }
+            on_music_changed (_app.current_music);
         }
 
         public void size_to_change (int width, int height) {
@@ -121,15 +123,26 @@ namespace G4 {
             _play_bar.on_size_changed (width - margin_bar * 2, spacing);
         }
 
+        private void create_drag_source () {
+            var point = Graphene.Point ();
+            var source = new Gtk.DragSource ();
+            source.actions = Gdk.DragAction.LINK;
+            source.drag_begin.connect ((drag) => source.set_icon (create_widget_paintable (music_cover, ref point), (int) point.x, (int) point.y));
+            source.prepare.connect ((x, y) => {
+                point.init ((float) x, (float) y);
+                var music = _app.current_music;
+                if (music != null) {
+                    var playlist = to_playlist ({ (!)music });
+                    return create_content_provider (playlist);
+                }
+                return null;
+            });
+            music_cover.add_controller (source);
+        }
+
         private Menu create_music_action_menu () {
             var music = _app.current_music ?? new Music.empty ();
-            var menu = create_menu_for_music (music);
-            if (music.cover_uri != null) {
-                menu.append_item (create_menu_item_for_uri ((!)music.cover_uri, _("Show _Cover File"), ACTION_APP + ACTION_SHOW_FILE));
-            } else if (_app.current_cover != null) {
-                menu.append_item (create_menu_item_for_uri (music.uri, _("_Export Cover"), ACTION_APP + ACTION_EXPORT_COVER));
-            }
-            return menu;
+            return create_menu_for_music (music, _app.current_cover != null);
         }
 
         private void on_index_changed (int index, uint size) {
@@ -138,29 +151,35 @@ namespace G4 {
             index_label.label = size > 0 ? @"$(index+1)/$(size)" : "";
         }
 
-        private Music? _current_music = null;
-
         private void on_music_changed (Music? music) {
+            if (!_size_allocated)
+                return;
+
             music_album.label = music?.album ?? "";
             music_artist.label = music?.artist ?? "";
             music_title.label = music?.title ?? "";
 
-            var empty = music == null;
+            var empty = _app.current_list.get_n_items () == 0;
             initial_label.visible = empty;
             if (empty) {
-                update_cover_paintables (music, _app.icon);
-                update_initial_label (_app.music_folder);
+                if (_app.loading || !_app.loader.library.empty)
+                    initial_label.label = "";
+                else
+                    update_initial_label (_app.music_folder);
             }
 
-            action_btn.sensitive = !empty;
-            root.action_set_enabled (ACTION_APP + ACTION_PLAY_PAUSE, !empty);
-            (_app.active_window as Window)?.set_title (music?.get_artist_and_title () ?? _app.name);
+            var enabled = music != null;
+            if (!enabled) {
+                update_cover_paintables (music, _app.icon);
+            }
+            action_btn.sensitive = enabled;
+            root.action_set_enabled (ACTION_APP + ACTION_PLAY_PAUSE, enabled);
+            Window.get_default ()?.set_title (music?.get_artist_and_title () ?? _app.name);
         }
 
         private bool on_music_folder_clicked (string uri) {
-            pick_music_folder_async.begin (_app, _app.active_window,
-                (dir) => update_initial_label (dir.get_uri ()),
-                (obj, res) => pick_music_folder_async.end (res));
+            pick_music_folder (_app, root as Window,
+                (dir) => update_initial_label (dir.get_uri ()));
             return true;
         }
 

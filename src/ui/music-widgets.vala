@@ -8,7 +8,7 @@ namespace G4 {
     }
 
     public class MusicWidget : Gtk.Box {
-        protected Gtk.Image _cover = new Gtk.Image ();
+        protected Gtk.Image _image = new Gtk.Image ();
         protected StableLabel _title = new StableLabel ();
         protected StableLabel _subtitle = new StableLabel ();
         protected RoundPaintable _paintable = new RoundPaintable ();
@@ -16,6 +16,8 @@ namespace G4 {
 
         public ulong first_draw_handler = 0;
         public Music? music = null;
+
+        public signal Menu? create_music_menu (Music? node);
 
         public MusicWidget () {
             _playing.halign = Gtk.Align.END;
@@ -33,18 +35,21 @@ namespace G4 {
             }
         }
 
+        public Gtk.Image image {
+            get {
+                return _image;
+            }
+        }
+
         public Gdk.Paintable? paintable {
             set {
                 _paintable.paintable = value;
             }
         }
 
-        public bool playing {
+        public Gtk.Image playing {
             get {
-                return _playing.visible;
-            }
-            set {
-                _playing.visible = value;
+                return _playing;
             }
         }
 
@@ -69,14 +74,12 @@ namespace G4 {
         }
 
         public void show_popover_menu (Gtk.Widget widget, double x, double y) {
-            var menu = create_item_menu ();
-            var popover = create_popover_menu (menu, x, y);
-            popover.set_parent (widget);
-            popover.popup ();
-        }
-
-        public virtual Menu create_item_menu () {
-            return new Menu ();
+            var menu = create_music_menu (music);
+            if (menu != null) {
+                var popover = create_popover_menu ((!)menu, x, y);
+                popover.set_parent (widget);
+                popover.popup ();
+            }
         }
     }
 
@@ -87,17 +90,16 @@ namespace G4 {
             margin_bottom = 10;
             width_request = 200;
 
-            _cover.margin_start = 8;
-            _cover.margin_end = 8;
-            _cover.margin_bottom = 8;
-            _cover.pixel_size = 160;
-            _cover.paintable = _paintable;
-            _paintable.queue_draw.connect (_cover.queue_draw);
-
             var overlay = new Gtk.Overlay ();
-            overlay.child = _cover;
+            overlay.margin_bottom = 8;
+            overlay.child = _image;
             overlay.add_overlay (_playing);
             append (overlay);
+
+            _image.halign = Gtk.Align.CENTER;
+            _image.pixel_size = 160;
+            _image.paintable = _paintable;
+            _paintable.queue_draw.connect (_image.queue_draw);
 
             _title.halign = Gtk.Align.CENTER;
             _title.ellipsize = EllipsizeMode.MIDDLE;
@@ -117,15 +119,6 @@ namespace G4 {
                 _subtitle.add_css_class ("title-secondly");
             append (_subtitle);
         }
-
-        public override Menu create_item_menu () {
-            if (music is Album) {
-                return create_menu_for_album ((Album) music);
-            } else if (music is Artist) {
-                return create_menu_for_artist ((Artist) music);
-            }
-            return base.create_item_menu ();
-        }
     }
 
     public class MusicEntry : MusicWidget {
@@ -134,15 +127,14 @@ namespace G4 {
 
             var cover_margin = compact ? 3 : 4;
             var cover_size = compact ? 36 : 48;
-            _cover.margin_top = cover_margin;
-            _cover.margin_bottom = cover_margin;
-            _cover.margin_start = 4;
-            _cover.pixel_size = cover_size;
-            _cover.paintable = _paintable;
-            _paintable.queue_draw.connect (_cover.queue_draw);
-            append (_cover);
+            _image.margin_top = cover_margin;
+            _image.margin_bottom = cover_margin;
+            _image.margin_start = 4;
+            _image.pixel_size = cover_size;
+            _image.paintable = _paintable;
+            _paintable.queue_draw.connect (_image.queue_draw);
+            append (_image);
 
-            var overlay = new Gtk.Overlay ();
             var spacing = compact ? 2 : 6;
             var vbox = new Gtk.Box (Gtk.Orientation.VERTICAL, spacing);
             vbox.hexpand = true;
@@ -151,9 +143,7 @@ namespace G4 {
             vbox.margin_end = 4;
             vbox.append (_title);
             vbox.append (_subtitle);
-            overlay.child = vbox;
-            overlay.add_overlay (_playing);
-            append (overlay);
+            append (vbox);
 
             _title.halign = Gtk.Align.START;
             _title.ellipsize = EllipsizeMode.END;
@@ -165,6 +155,8 @@ namespace G4 {
             var font_size = _subtitle.get_pango_context ().get_font_description ().get_size () / Pango.SCALE;
             if (font_size >= 13)
                 _subtitle.add_css_class ("title-secondly");
+
+            append (_playing);
         }
 
         public void set_titles (Music music, uint sort) {
@@ -197,26 +189,6 @@ namespace G4 {
                     break;
             }
         }
-
-        public override Menu create_item_menu () {
-            if (this.music != null) {
-                var app = (Application) GLib.Application.get_default ();
-                var music = (!) this.music;
-                var menu = create_menu_for_music (music);
-                if (music != app.current_music) {
-                    /* Translators: Play this music at next position of current playing music */
-                    menu.prepend_item (create_menu_item_for_uri (music.uri, _("Play at Next"), ACTION_APP + ACTION_PLAY_AT_NEXT));
-                    menu.prepend_item (create_menu_item_for_uri (music.uri, _("Play"), ACTION_APP + ACTION_PLAY));
-                }
-                if (music.cover_uri != null) {
-                    menu.append_item (create_menu_item_for_uri ((!)music.cover_uri, _("Show _Cover File"), ACTION_APP + ACTION_SHOW_FILE));
-                } else if (app.thumbnailer.find (music) is Gdk.Texture) {
-                    menu.append_item (create_menu_item_for_uri (music.uri, _("_Export Cover"), ACTION_APP + ACTION_EXPORT_COVER));
-                }
-                return menu;
-            }
-            return base.create_item_menu ();
-        }
     }
 
     public string[] build_action_target_for_album (Album album) {
@@ -231,41 +203,123 @@ namespace G4 {
             return { PageName.ALBUM, album_key };
     }
 
+    public const string LIBRARY_SCHEME = "library://";
+
+    public string build_library_uri (Artist? artist, Album? album) {
+        var album_key = album?.album_key ?? "";
+        var arr = (artist != null) ? new string[] { PageName.ARTIST, ((!)artist).artist_name, album_key }
+                    : (album is Playlist) ? new string[] { PageName.PLAYLIST, album_key }
+                        : (album != null) ? new string[] { PageName.ALBUM, album_key }
+                            : new string[] { PageName.PLAYING };
+        return build_library_uri_from_sa (arr);
+    }
+
+    public string build_library_uri_from_sa (string[] arr) {
+        var sb = new StringBuilder (LIBRARY_SCHEME);
+        if (arr.length > 0) {
+            sb.append (arr[0]);
+            for (var i = 1; i < arr.length; i++) {
+                sb.append_c ('/');
+                sb.append (Uri.escape_string (arr[i]));
+            }
+        }
+        return sb.str;
+    }
+
+    public bool parse_library_uri (string uri_str, out string? artist, out string? album, out string? playlist, out string? host = null) {
+        host = null;
+        artist = null;
+        album = null;
+        playlist = null;
+        if (uri_str.has_prefix (LIBRARY_SCHEME)) {
+            var path = uri_str.substring (LIBRARY_SCHEME.length);
+            var arr = path.split ("/");
+            if (arr.length > 1) {
+                var key = Uri.unescape_string (arr[1]) ?? "";
+                switch (arr[0]) {
+                    case PageName.ALBUM:
+                        album = key;
+                        break;
+                    case PageName.ARTIST:
+                        artist = key;
+                        if (arr.length > 2)
+                            album = Uri.unescape_string (arr[2]);
+                        break;
+                    case PageName.PLAYLIST:
+                        playlist = key;
+                        break;
+                }
+            }
+            host = arr[0];
+            return true;
+        }
+        return false;
+    }
+
     public MenuItem create_menu_item_for_strv (string[] strv, string label, string action) {
         var item = new MenuItem (label, null);
-        item.set_action_and_target_value (action, new Variant.bytestring_array (strv));
+        item.set_action_and_target_value (action, new Variant.strv (strv));
         return item;
     }
 
     public MenuItem create_menu_item_for_uri (string uri, string label, string action) {
-        return create_menu_item_for_strv ({"uri", uri}, label, action);
+        var item = new MenuItem (label, null);
+        item.set_action_and_target_value (action, new Variant.string (uri));
+        return item;
     }
 
     public Menu create_menu_for_album (Album album) {
-        var is_playlist = album is Playlist;
-        var strv = build_action_target_for_album (album);
+        var uri = build_library_uri (null, album);
         var menu = new Menu ();
-        menu.append_item (create_menu_item_for_strv (strv, _("Play"), ACTION_APP + ACTION_PLAY));
-        menu.append_item (create_menu_item_for_strv (strv, _("Play at Next"), ACTION_APP + ACTION_PLAY_AT_NEXT));
-        if (is_playlist)
-            menu.append_item (create_menu_item_for_uri (((Playlist) album).list_uri, _("Show List File"), ACTION_APP + ACTION_SHOW_FILE));
+        menu.append_item (create_menu_item_for_uri (uri, _("Play"), ACTION_APP + ACTION_PLAY));
+        menu.append_item (create_menu_item_for_uri (uri, _("_Random Play"), ACTION_APP + ACTION_RANDOM_PLAY));
+        var section = new Menu ();
+        section.append_item (create_menu_item_for_uri (uri, _("Play at _Next"), ACTION_APP + ACTION_PLAY_AT_NEXT));
+        section.append_item (create_menu_item_for_uri (uri, _("Add to _Queue"), ACTION_APP + ACTION_ADD_TO_QUEUE));
+        section.append_item (create_menu_item_for_uri (uri, _("Add to _Playlist…"), ACTION_APP + ACTION_ADD_TO_PLAYLIST));
+        menu.append_section (null, section);
+        if (album is Playlist) {
+            unowned var list_uri = ((Playlist) album).list_uri;
+            if (list_uri.length > 0) {
+                var section2 = new Menu ();
+                section2.append_item (create_menu_item_for_uri (list_uri, _("Show List _File"), ACTION_APP + ACTION_SHOW_FILE));
+                section2.append_item (create_menu_item_for_uri (list_uri, _("_Move to Trash"), ACTION_APP + ACTION_TRASH_FILE));
+                menu.append_section (null, section2);
+            }
+        }
         return menu;
     }
 
     public Menu create_menu_for_artist (Artist artist) {
-        string[] strv = { PageName.ARTIST, artist.name };
+        var uri = build_library_uri (artist, null);
         var menu = new Menu ();
-        menu.append_item (create_menu_item_for_strv (strv, _("Play"), ACTION_APP + ACTION_PLAY));
-        menu.append_item (create_menu_item_for_strv (strv, _("Play at Next"), ACTION_APP + ACTION_PLAY_AT_NEXT));
+        menu.append_item (create_menu_item_for_uri (uri, _("Play"), ACTION_APP + ACTION_PLAY));
+        menu.append_item (create_menu_item_for_uri (uri, _("_Random Play"), ACTION_APP + ACTION_RANDOM_PLAY));
+        var section = new Menu ();
+        section.append_item (create_menu_item_for_uri (uri, _("Play at _Next"), ACTION_APP + ACTION_PLAY_AT_NEXT));
+        section.append_item (create_menu_item_for_uri (uri, _("Add to _Queue"), ACTION_APP + ACTION_ADD_TO_QUEUE));
+        section.append_item (create_menu_item_for_uri (uri, _("Add to _Playlist…"), ACTION_APP + ACTION_ADD_TO_PLAYLIST));
+        menu.append_section (null, section);
         return menu;
     }
 
-    public Menu create_menu_for_music (Music music) {
+    public Menu create_menu_for_music (Music music, bool has_cover) {
+        var section = new Menu ();
+        section.append_item (create_menu_item_for_strv ({"title", music.title}, _("Search Title"), ACTION_WIN + ACTION_SEARCH));
+        section.append_item (create_menu_item_for_strv ({"album", music.album}, _("Search Album"), ACTION_WIN + ACTION_SEARCH));
+        section.append_item (create_menu_item_for_strv ({"artist", music.artist}, _("Search Artist"), ACTION_WIN + ACTION_SEARCH));
+        unowned var uri = music.uri;
+        var section2 = new Menu ();
+        if (music.cover_uri != null)
+            section2.append_item (create_menu_item_for_uri ((!)music.cover_uri, _("Show Cover _File"), ACTION_APP + ACTION_SHOW_FILE));
+        else if (has_cover)
+            section2.append_item (create_menu_item_for_uri (uri, _("_Export Cover"), ACTION_APP + ACTION_EXPORT_COVER));
+        section2.append_item (create_menu_item_for_uri (uri, _("Show _Tags…"), ACTION_APP + ACTION_SHOW_TAGS));
+        section2.append_item (create_menu_item_for_uri (uri, _("Show Music _File"), ACTION_APP + ACTION_SHOW_FILE));
         var menu = new Menu ();
-        menu.append_item (create_menu_item_for_strv ({"title", music.title}, _("Search Title"), ACTION_APP + ACTION_SEARCH));
-        menu.append_item (create_menu_item_for_strv ({"album", music.album}, _("Search Album"), ACTION_APP + ACTION_SEARCH));
-        menu.append_item (create_menu_item_for_strv ({"artist", music.artist}, _("Search Artist"), ACTION_APP + ACTION_SEARCH));
-        menu.append_item (create_menu_item_for_uri (music.uri, _("_Show Music File"), ACTION_APP + ACTION_SHOW_FILE));
+        menu.append_item (create_menu_item_for_uri (uri, _("Add to _Playlist…"), ACTION_APP + ACTION_ADD_TO_PLAYLIST));
+        menu.append_section (null, section);
+        menu.append_section (null, section2);
         return menu;
     }
 
@@ -285,13 +339,26 @@ namespace G4 {
 
     public delegate void Pressed (Gtk.Widget widget, double x, double y);
 
-    public void make_right_clickable (Gtk.Widget widget, Pressed pressed) {
-        var long_press = new Gtk.GestureLongPress ();
-        long_press.pressed.connect ((x, y) => pressed (widget, x, y));
-        var right_click = new Gtk.GestureClick ();
-        right_click.button = Gdk.BUTTON_SECONDARY;
-        right_click.pressed.connect ((n, x, y) => pressed (widget, x, y));
-        widget.add_controller (long_press);
-        widget.add_controller (right_click);
+    public Gtk.GestureLongPress make_long_pressable (Gtk.Widget widget, Pressed pressed) {
+        var gesture = new Gtk.GestureLongPress ();
+        gesture.pressed.connect ((x, y) => pressed (widget, x, y));
+        widget.add_controller (gesture);
+        return gesture;
+    }
+
+    public Gtk.GestureClick make_right_clickable (Gtk.Widget widget, Pressed pressed) {
+        var gesture = new Gtk.GestureClick ();
+        gesture.button = Gdk.BUTTON_SECONDARY;
+        gesture.pressed.connect ((n, x, y) => pressed (widget, x, y));
+        widget.add_controller (gesture);
+        return gesture;
+    }
+
+    public void remove_controllers (Gtk.Widget widget) {
+        var controllers = widget.observe_controllers ();
+        for (var i = (int) controllers.get_n_items () - 1; i >= 0; i--) {
+            var controller = (Gtk.EventController) controllers.get_item (i);
+            widget.remove_controller (controller);
+        }
     }
 }
